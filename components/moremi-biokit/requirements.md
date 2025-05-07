@@ -1,0 +1,13 @@
+# smiles/antibodies requirements
+- admet_ai
+- torch==2.5.1
+- biopython
+- iedb
+- pandas
+- numpy
+- matplotlib
+- scikit-learn
+- seaborn
+- tqdm
+- fpdf
+- requests
