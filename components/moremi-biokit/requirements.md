@@ -11,3 +11,5 @@
 - tqdm
 - fpdf
 - requests
+- rdkit
+- py3Dmol

@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moremi-biokit"
+version = "0.1.0"
+description = "Core biological processing toolkit for the Moremi Bio ecosystem."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "../../LICENSE" } # Points to the monorepo root LICENSE
+authors = [
+  { name = "Bio Team", email = "contact@minohealth.org" },
+]
+# Add classifiers if you plan to ever publish to an internal PyPI
+# classifiers = [
+#     "Development Status :: 3 - Alpha",
+#     "Intended Audience :: Developers",
+#     "Programming Language :: Python :: 3",
+#     # ...
+# ]
+
+dependencies = [
+    "admet_ai",
+    "torch==2.5.1",
+    "biopython",
+    "iedb",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "seaborn",
+    "tqdm",
+    "fpdf",
+    "requests",
+    "rdkit",
+    "py3Dmol"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest >= 7.0",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy", # Optional: for static type checking
+    "pre-commit", # For git hooks
+]
+
+[project.scripts]
+convert-smiles = "moremi_biokit.smiles.utils.convert_smiles:main"
+# generate-molecule-report = "moremi_biokit.smiles.reports.cli:main" # Placeholder for report CLI
+
+[tool.setuptools]
+package-data = {
+    "moremi_biokit.assets" = ["fonts/*", "minologo.png"],
+}
