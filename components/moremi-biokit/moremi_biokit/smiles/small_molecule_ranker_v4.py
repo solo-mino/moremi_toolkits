@@ -177,15 +177,15 @@ class ScoringConfig:
 class SmallMoleculeRankerV4:
     """Enhanced molecule ranker implementing comprehensive scoring system"""
     
-    def __init__(self, config: Optional[ScoringConfig] = None, generate_pdf: Optional[bool] = False):
+    def __init__(self, config: Optional[ScoringConfig] = None, generate_pdf: Optional[bool] = False, generate_csv: Optional[bool] = True):
         """Initialize ranker with configuration"""
         self.config = config or ScoringConfig()
         self.ranges = MetricRanges()
         self.df = None
         # Add output directory for reports
         self.reports_dir = None
-        # if False, no pdf will be generated. else report pdf will be generated
         self.generate_pdf = generate_pdf
+        self.generate_csv = generate_csv
 
     def set_output_directory(self, output_dir: str):
         """Set the output directory for reports"""
@@ -342,8 +342,8 @@ class SmallMoleculeRankerV4:
             # csv_path = os.path.join(molecule_reports_dir, f"{metrics.molecular_formula}_analysis.csv")
             
             # Generate reports
-            # TODO: ADDED FALSE HERE TO IGNORE PDF GENERTATION FOR THE SAKE OF TOXICITY PAPER
-            generate_enhanced_report(molecule_data, molecule_reports_dir, generate_pdf=self.generate_pdf)
+            # TODO: ADDED FALSE HERE TO IGNORE PDF GENERTATION FOR THE SAKE OF TOXICITY PAPER - User wants to control this
+            generate_enhanced_report(molecule_data, molecule_reports_dir, generate_pdf=self.generate_pdf, generate_csv=self.generate_csv)
             
             # Generate ranking reports with timestamps
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -737,8 +737,8 @@ class SmallMoleculeRankerV4:
             }
 
             # Generate reports
-            # TODO: ADDED FALSE HERE TO IGNORE PDF GENERATION FOR THE SAKE OF TOXICITY PAPER
-            generate_enhanced_report(molecule_data, str(reports_dir), generate_pdf=False)
+            # TODO: ADDED FALSE HERE TO IGNORE PDF GENERTATION FOR THE SAKE OF TOXICITY PAPER - User wants to control this
+            generate_enhanced_report(molecule_data, str(reports_dir), generate_pdf=self.generate_pdf, generate_csv=self.generate_csv)
             report_files.extend([pdf_file, csv_file])
         
         return report_files
@@ -766,6 +766,29 @@ class SmallMoleculeRankerV4:
         print(f"CSV: {csv_file}")
         print(f"PDF: {pdf_file}")
         
+    def get_ranked_data_as_dict(self) -> List[Dict[str, Any]]:
+        """Returns the ranked molecules data as a list of dictionaries.
+
+        Each dictionary in the list represents a molecule and its associated data
+        as present in the internal ranked DataFrame.
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary
+                                 is a row from the ranked DataFrame. Returns an
+                                 empty list if ranking has not been performed or
+                                 resulted in an empty DataFrame.
+        
+        Example:
+            >>> # Assuming 'ranker' is an instance of SmallMoleculeRankerV4
+            >>> # and rank_molecules() has been called.
+            >>> ranked_list_of_dicts = ranker.get_ranked_data_as_dict()
+            >>> if ranked_list_of_dicts:
+            ...     print(f"Top ranked molecule SMILES: {ranked_list_of_dicts[0]['SMILES']}")
+        """
+        if self.df is not None and not self.df.empty:
+            return self.df.to_dict(orient="records")
+        return []
+
 def rank_molecules_from_metrics(
     metrics_input: Union[str, List[dict]],
     output_dir: str,

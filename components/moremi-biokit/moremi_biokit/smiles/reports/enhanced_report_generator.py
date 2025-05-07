@@ -609,7 +609,7 @@ class EnhancedMoleculeReport(FPDF):
             self.add_radar_chart(data['scores']['category_scores'])
             self.ln(5)
 
-    def generate_pdf_report(self, data: Dict[str, Any], output_path: str):
+    def generate_pdf_report(self, data: Dict, output_path: str):
         """Generate the complete PDF report."""
         self.create_report(data)
         
@@ -634,7 +634,7 @@ def generate_csv_report(data: Dict[str, Any], output_path: str):
     df = pd.DataFrame([flat_data])
     df.to_csv(output_path, index=False)
 
-def generate_enhanced_report(molecule_data: Dict[str, Any], output_dir: str, generate_pdf: Optional[bool] = True):
+def generate_enhanced_report(molecule_data: Dict[str, Any], output_dir: str, generate_pdf: Optional[bool] = True, generate_csv: Optional[bool] = True):
     """Generate enhanced PDF and CSV reports for molecular analysis."""
     # Create output directory if it doesn't exist
     output_dir = Path(output_dir)
@@ -649,17 +649,26 @@ def generate_enhanced_report(molecule_data: Dict[str, Any], output_dir: str, gen
     # Get rank from molecule data, default to 0 if not provided
     rank = molecule_data.get('rank', 0)
     
-    pdf_path = None  # Initialize pdf_path with None
+    pdf_path = None
+    csv_path = None
+
     # Create PDF report with rank in filename
     if generate_pdf:
         pdf_path = output_dir / f'r{rank}_{molecule_data["molecular_formula"]}_{timestamp}.pdf'
         report.generate_pdf_report(molecule_data, str(pdf_path))
     
     # Create CSV report with rank in filename
-    csv_path = output_dir / f'r{rank}_{molecule_data["molecular_formula"]}_{timestamp}.csv'
-    generate_csv_report(molecule_data, str(csv_path))
+    if generate_csv:
+        csv_path = output_dir / f'r{rank}_{molecule_data["molecular_formula"]}_{timestamp}.csv'
+        generate_csv_report(molecule_data, str(csv_path))
     
-    return pdf_path, csv_path if generate_pdf else csv_path
+    if generate_pdf and generate_csv:
+        return pdf_path, csv_path
+    elif generate_pdf:
+        return pdf_path, None
+    elif generate_csv:
+        return None, csv_path
+    return None, None
 
 def generate_radar_chart(data: Dict[str, float], output_dir: str):
     """Create a radar chart for a category of properties."""

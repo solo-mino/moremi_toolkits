@@ -49,7 +49,7 @@ dev = [
 
 [project.scripts]
 convert-smiles = "moremi_biokit.smiles.utils.convert_smiles:main"
-# generate-molecule-report = "moremi_biokit.smiles.reports.cli:main" # Placeholder for report CLI
+process-smiles-batch = "moremi_biokit.smiles.batch_molecule_processor:main"
 
 [tool.setuptools]
 package-data = {
