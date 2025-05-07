@@ -1,5 +1,6 @@
 
 # Moremi Toolkits Monorepo
+DRAFT V 0.1.0
 
 ## Overview
 
@@ -55,7 +56,7 @@ moremi_toolkits/
 
 1.  **Clone the repository:**
     ```bash
-    git clone <your_internal_git_repo_url>/moremi_toolkits.git
+    git clone git@github.com:solo-mino/moremi_toolkits.git
     cd moremi_toolkits
     ```
 
@@ -92,13 +93,13 @@ The `moremi-biokit` package should be installed as a dependency.
 
     *   **From a specific tag (recommended for stable builds):**
         ```
-        moremi-biokit @ git+<your_internal_git_repo_url>/moremi_toolkits.git@v0.1.0#subdirectory=components/moremi_biokit
+        moremi-biokit @ git@github.com:solo-mino/moremi_toolkits.git@v0.1.0#subdirectory=components/moremi_biokit
         ```
         (Replace `v0.1.0` with the desired tag and `<your_internal_git_repo_url>` with the actual URL)
 
     *   **From a specific branch (e.g., `main` - for development or cutting-edge builds):**
         ```
-        moremi-biokit @ git+<your_internal_git_repo_url>/moremi_toolkits.git@main#subdirectory=components/moremi_biokit
+        moremi-biokit @ git@github.com:solo-mino/moremi_toolkits.git@main#subdirectory=components/moremi_biokit
         ```
 
 2.  **Install dependencies in the consuming project:**
