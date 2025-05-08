@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 import re
 
-def combine_pdb_files(protein1_path, protein2_path, output_path):
+def _combine_pdb_files(protein1_path, protein2_path, output_path):
     """Combine two PDB files into one, with the second protein's chains renamed"""
     print(f"Combining PDB files into {output_path}")
     
@@ -28,7 +28,8 @@ def combine_pdb_files(protein1_path, protein2_path, output_path):
                 out.write(line)
         out.write('END\n')
 
-def save_results(sequence_num, affinity, prodigy_output, protein_path, antigen_path, error=None, output_dir="hepatitis_binding_results"):
+
+def _save_results(sequence_num, affinity, prodigy_output, protein_path, antigen_path, error=None, output_dir="hepatitis_binding_results"):
     """Save results to a text file with sequence number and timestamp"""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -70,13 +71,86 @@ def save_results(sequence_num, affinity, prodigy_output, protein_path, antigen_p
     
     print(f"Results saved to: {output_file}")
 
-def predict_binding_affinity(antibody_path, antigen_path, system_type=None):
+
+def _extract_sequence_number(filename):
+    """Extract sequence number from filename"""
+    match = re.search(r'sequence_(\d+)_structure', filename)
+    return int(match.group(1)) if match else None
+
+
+def _analyze_sequence_gaps(pdb_files):
+    """Analyze gaps in sequence numbers"""
+    sequence_numbers = set()
+    for pdb_file in pdb_files:
+        seq_num = _extract_sequence_number(pdb_file)
+        if seq_num is not None:
+            sequence_numbers.add(seq_num)
+    
+    # Find min and max sequence numbers
+    min_seq = min(sequence_numbers)
+    max_seq = max(sequence_numbers)
+    
+    # Find missing sequence numbers
+    all_sequences = set(range(min_seq, max_seq + 1))
+    missing_sequences = sorted(all_sequences - sequence_numbers)
+    
+    return min_seq, max_seq, missing_sequences
+
+
+def _save_summary(results, output_dir="hepatitis_binding_results"):
+    """Save summary of all predictions"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_file = os.path.join(output_dir, f"binding_affinity_summary_{timestamp}.txt")
+    
+    successful_predictions = [r for r in results if r['affinity'] is not None]
+    failed_predictions = [r for r in results if r['affinity'] is None]
+    
+    if successful_predictions:
+        affinities = [r['affinity'] for r in successful_predictions]
+        min_affinity = min(affinities)
+        max_affinity = max(affinities)
+        avg_affinity = sum(affinities) / len(affinities)
+    
+    with open(summary_file, 'w') as f:
+        f.write("Binding Affinity Prediction Summary\n")
+        f.write("=================================\n\n")
+        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        f.write("Overall Statistics:\n")
+        f.write("-----------------\n")
+        f.write(f"Total predictions attempted: {len(results)}\n")
+        f.write(f"Successful predictions: {len(successful_predictions)}\n")
+        f.write(f"Failed predictions: {len(failed_predictions)}\n\n")
+        
+        if successful_predictions:
+            f.write("Binding Affinity Statistics:\n")
+            f.write("-------------------------\n")
+            f.write(f"Minimum affinity: {min_affinity:.2f} kcal/mol\n")
+            f.write(f"Maximum affinity: {max_affinity:.2f} kcal/mol\n")
+            f.write(f"Average affinity: {avg_affinity:.2f} kcal/mol\n\n")
+        
+        if failed_predictions:
+            f.write("Failed Predictions:\n")
+            f.write("-----------------\n")
+            for result in failed_predictions:
+                f.write(f"Sequence {result['sequence']}: {result['error']}\n")
+        
+        f.write("\nTop 10 Strongest Binding Sequences:\n")
+        f.write("--------------------------------\n")
+        top_10 = sorted(successful_predictions, key=lambda x: x['affinity'])[:10]
+        for result in top_10:
+            f.write(f"Sequence {result['sequence']}: {result['affinity']:.2f} kcal/mol\n")
+    
+    print(f"\nSummary saved to: {summary_file}")
+
+
+def predict_binding_affinity(receptor, ligand, system_type=None):
     """
     Predict binding affinity between two protein structures using PRODIGY
     
     Args:
-        antibody_path (str): Path to first PDB file
-        antigen_path (str): Path to second PDB file
+        receptor (str): Path to receptor PDB file(mostly antigen)
+        ligand (str): Path to ligand PDB file(mostly antibody)
         system_type (str): Operating system type ('windows_wsl', 'macos', 'linux', None)
                           If None, will auto-detect the system
     
@@ -94,7 +168,7 @@ def predict_binding_affinity(antibody_path, antigen_path, system_type=None):
             - binding_affinity: Predicted binding affinity in kcal/mol
             - dissociation_constant: Predicted dissociation constant in M at 25°C
     """
-    print(f"Processing files:\n- {antibody_path}\n- {antigen_path}")
+    print(f"Processing files:\n- {receptor}\n- {ligand}")
     
     # Auto-detect system type if not provided
     if system_type is None:
@@ -115,14 +189,14 @@ def predict_binding_affinity(antibody_path, antigen_path, system_type=None):
     
     # Combine PDB files
     combined_pdb = "complex.pdb"
-    combine_pdb_files(antibody_path, antigen_path, combined_pdb)
+    _combine_pdb_files(receptor, ligand, combined_pdb)
     
     try:
         # Run PRODIGY prediction
         if system_type == 'windows_wsl':
             # Convert Windows paths to WSL paths
-            wsl_protein1 = subprocess.getoutput(f'wsl wslpath "{antibody_path}"')
-            wsl_protein2 = subprocess.getoutput(f'wsl wslpath "{antigen_path}"')
+            wsl_protein1 = subprocess.getoutput(f'wsl wslpath "{receptor}"')
+            wsl_protein2 = subprocess.getoutput(f'wsl wslpath "{ligand}"')
             
             # Create a temporary directory in WSL
             temp_dir = subprocess.getoutput('wsl mktemp -d')
@@ -224,74 +298,6 @@ def predict_binding_affinity(antibody_path, antigen_path, system_type=None):
         if os.path.exists(combined_pdb):
             os.remove(combined_pdb)
 
-def extract_sequence_number(filename):
-    """Extract sequence number from filename"""
-    match = re.search(r'sequence_(\d+)_structure', filename)
-    return int(match.group(1)) if match else None
-
-def analyze_sequence_gaps(pdb_files):
-    """Analyze gaps in sequence numbers"""
-    sequence_numbers = set()
-    for pdb_file in pdb_files:
-        seq_num = extract_sequence_number(pdb_file)
-        if seq_num is not None:
-            sequence_numbers.add(seq_num)
-    
-    # Find min and max sequence numbers
-    min_seq = min(sequence_numbers)
-    max_seq = max(sequence_numbers)
-    
-    # Find missing sequence numbers
-    all_sequences = set(range(min_seq, max_seq + 1))
-    missing_sequences = sorted(all_sequences - sequence_numbers)
-    
-    return min_seq, max_seq, missing_sequences
-
-def save_summary(results, output_dir="hepatitis_binding_results"):
-    """Save summary of all predictions"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_file = os.path.join(output_dir, f"binding_affinity_summary_{timestamp}.txt")
-    
-    successful_predictions = [r for r in results if r['affinity'] is not None]
-    failed_predictions = [r for r in results if r['affinity'] is None]
-    
-    if successful_predictions:
-        affinities = [r['affinity'] for r in successful_predictions]
-        min_affinity = min(affinities)
-        max_affinity = max(affinities)
-        avg_affinity = sum(affinities) / len(affinities)
-    
-    with open(summary_file, 'w') as f:
-        f.write("Binding Affinity Prediction Summary\n")
-        f.write("=================================\n\n")
-        f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        
-        f.write("Overall Statistics:\n")
-        f.write("-----------------\n")
-        f.write(f"Total predictions attempted: {len(results)}\n")
-        f.write(f"Successful predictions: {len(successful_predictions)}\n")
-        f.write(f"Failed predictions: {len(failed_predictions)}\n\n")
-        
-        if successful_predictions:
-            f.write("Binding Affinity Statistics:\n")
-            f.write("-------------------------\n")
-            f.write(f"Minimum affinity: {min_affinity:.2f} kcal/mol\n")
-            f.write(f"Maximum affinity: {max_affinity:.2f} kcal/mol\n")
-            f.write(f"Average affinity: {avg_affinity:.2f} kcal/mol\n\n")
-        
-        if failed_predictions:
-            f.write("Failed Predictions:\n")
-            f.write("-----------------\n")
-            for result in failed_predictions:
-                f.write(f"Sequence {result['sequence']}: {result['error']}\n")
-        
-        f.write("\nTop 10 Strongest Binding Sequences:\n")
-        f.write("--------------------------------\n")
-        top_10 = sorted(successful_predictions, key=lambda x: x['affinity'])[:10]
-        for result in top_10:
-            f.write(f"Sequence {result['sequence']}: {result['affinity']:.2f} kcal/mol\n")
-    
-    print(f"\nSummary saved to: {summary_file}")
 
 def main():
     # Paths
@@ -303,7 +309,7 @@ def main():
     total_files = len(pdb_files)
     
     # Analyze sequence gaps
-    min_seq, max_seq, missing_sequences = analyze_sequence_gaps(pdb_files)
+    min_seq, max_seq, missing_sequences = _analyze_sequence_gaps(pdb_files)
     
     print(f"\nSequence Analysis:")
     print(f"Total PDB files found: {total_files}")
@@ -320,8 +326,8 @@ def main():
     print(f"\nStarting binding affinity predictions...")
     results = []
     
-    for i, pdb_file in enumerate(sorted(pdb_files, key=extract_sequence_number), 1):
-        seq_num = extract_sequence_number(pdb_file)
+    for i, pdb_file in enumerate(sorted(pdb_files, key=_extract_sequence_number), 1):
+        seq_num = _extract_sequence_number(pdb_file)
         print(f"\nProcessing file {i}/{total_files}: {pdb_file} (Sequence {seq_num})")
         
         if seq_num is None:
@@ -341,7 +347,7 @@ def main():
         })
         
         # Save individual result
-        save_results(seq_num, affinity, prodigy_output, protein_path, antigen_path, error)
+        _save_results(seq_num, affinity, prodigy_output, protein_path, antigen_path, error)
         
         if affinity is not None:
             print(f"\nPredicted binding affinity: {affinity:.2f} kcal/mol")
@@ -349,7 +355,7 @@ def main():
             print(f"\nFailed to predict binding affinity: {error}")
     
     # Save summary
-    save_summary(results)
+    _save_summary(results)
 
 if __name__ == "__main__":
     main()
