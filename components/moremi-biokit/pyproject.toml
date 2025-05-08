@@ -55,3 +55,14 @@ process-smiles-batch = "moremi_biokit.smiles.batch_molecule_processor:main"
 package-data = {
     "moremi_biokit.assets" = ["fonts/*", "minologo.png"],
 }
+
+[tool.setuptools.package-data]
+# Include assets for smiles reports (fonts, images) and antibodies utils (CSV database)
+"moremi_biokit" = [
+    "assets/fonts/*.ttf", 
+    "assets/images/*.png",
+    "antibodies/utils/*.csv", 
+]
+
+# Example of excluding files (if needed)
+# exclude = ["*.pyc", "*~"]
