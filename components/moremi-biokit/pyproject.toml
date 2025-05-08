@@ -48,8 +48,12 @@ dev = [
 ]
 
 [project.scripts]
+# SMILES tools
 convert-smiles = "moremi_biokit.smiles.utils.convert_smiles:main"
 process-smiles-batch = "moremi_biokit.smiles.batch_molecule_processor:main"
+# Antibody tools
+predict-structure = "moremi_biokit.antibodies.analysis_tools.structure_predictor:main"
+fetch-pdb = "moremi_biokit.antibodies.utils.pdb_fetcher:main"
 
 [tool.setuptools]
 package-data = {

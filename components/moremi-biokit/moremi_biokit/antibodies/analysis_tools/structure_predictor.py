@@ -14,6 +14,7 @@ from io import BytesIO
 import gzip
 from datetime import datetime
 from typing import Optional, Dict, Any, List
+import argparse
 
 # Consider moving to a configuration file or environment variables for production
 # For now, keeping as a placeholder if token is not directly provided.
@@ -193,42 +194,92 @@ def predict_structure(
     except Exception as e:
         return {"error": f"An unexpected error occurred in predict_structure: {e}"}
 
-if __name__ == '__main__':
-    # Example Usage (requires a valid SWISS-MODEL API token for extensive use)
-    # Replace with your actual API token or set it up to be passed
-    # For a quick test without a token, it *might* work if the default list has a valid one
-    # but this is unreliable.
-    
-    example_sequence = "VAYPLQGSVCSTCLEGTCARLETYRLSCGSGTCGRRGFRRLADDVRVCSATEGTC"
-    # test_api_token = None # Uses random token from list (not recommended)
-    test_api_token = os.environ.get("SWISS_MODEL_API_TOKEN") # Better: get from env
-
-    if not test_api_token and DEFAULT_SWISS_MODEL_API_TOKENS:
-        print("Warning: SWISS_MODEL_API_TOKEN environment variable not set. Using a default token from the list.")
-        # test_api_token = random.choice(DEFAULT_SWISS_MODEL_API_TOKENS) # Enable if you want to force use default for testing
-    elif not test_api_token and not DEFAULT_SWISS_MODEL_API_TOKENS:
-        print("Error: No API token provided and no default tokens available. Exiting example.")
-        exit()
-    
-    print(f"Using API Token: {'Provided' if test_api_token else 'Attempting Default'}")
-
-    results = predict_structure(
-        sequence=example_sequence, 
-        api_token=test_api_token, 
-        output_directory="./swiss_model_predictions",
-        project_title_prefix="example_antibody_vh",
-        output_pdb_filename_prefix="vh_model"
+def main():
+    """Command-line interface for predicting protein structure using SWISS-MODEL."""
+    parser = argparse.ArgumentParser(
+        description="Predict protein structure using the SWISS-MODEL API.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "sequence", 
+        type=str, 
+        help="The amino acid sequence for structure prediction."
+    )
+    parser.add_argument(
+        "--api-token", 
+        type=str, 
+        default=os.environ.get("SWISS_MODEL_API_TOKEN"), 
+        help="SWISS-MODEL API token. Reads from SWISS_MODEL_API_TOKEN environment variable if not provided."
+    )
+    parser.add_argument(
+        "--output-dir", 
+        type=str, 
+        default=".", 
+        help="Directory to save the output PDB file."
+    )
+    parser.add_argument(
+        "--filename-prefix", 
+        type=str, 
+        default="predicted_structure", 
+        help="Prefix for the output PDB filename."
+    )
+    parser.add_argument(
+        "--title-prefix",
+        type=str,
+        default="moremi_biokit_prediction",
+        help="Prefix for the project title submitted to SWISS-MODEL."
+    )
+    parser.add_argument(
+        "--polling-interval",
+        type=int,
+        default=DEFAULT_POLLING_INTERVAL_SECONDS,
+        help="Polling interval in seconds to check job status."
+    )
+    parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=DEFAULT_MAX_POLLING_ATTEMPTS,
+        help="Maximum number of polling attempts before timeout."
     )
 
-    if "error" in results:
-        print(f"\nPrediction Failed:")
-        print(f"  Error: {results['error']}")
+    args = parser.parse_args()
+
+    # Basic validation for token presence (either via arg or env var)
+    if not args.api_token and not DEFAULT_SWISS_MODEL_API_TOKENS:
+        parser.error("SWISS-MODEL API token is required. Provide it via --api-token or set the SWISS_MODEL_API_TOKEN environment variable, or ensure default tokens are available in the script.")
+    elif not args.api_token:
+        print("Warning: API token not provided via --api-token or environment variable. Attempting to use a default token (not recommended for production).")
+
+    print(f"Starting structure prediction for sequence: {args.sequence[:15]}... Output dir: {args.output_dir}")
+
+    results = predict_structure(
+        sequence=args.sequence,
+        api_token=args.api_token, # Will be None if not provided and no env var
+        project_title_prefix=args.title_prefix,
+        output_directory=args.output_dir,
+        output_pdb_filename_prefix=args.filename_prefix,
+        polling_interval=args.polling_interval,
+        max_polling_attempts=args.max_attempts
+    )
+
+    print("--- Prediction Results ---")
+    if results.get("status") == "error" or "error" in results: # Check both for safety
+        print(f"Status: ERROR")
+        print(f"Message: {results.get('error', 'Unknown error')}")
         if "details" in results:
-            print(f"  Details: {results['details']}")
+            print(f"Details: {results['details']}")
     else:
-        print(f"\nPrediction Successful!")
-        print(f"  Project ID: {results.get('project_id')}")
-        print(f"  PDB file saved to: {results.get('pdb_file_path')}")
-        print(f"  Model GMQE: {results.get('model_details', {}).get('gmqe')}")
-        print(f"  Model QMEAN Z-score: {results.get('model_details', {}).get('qmean_z_score')}")
-        # print(f"\n  PDB Content (first 200 chars):\n{results.get('pdb_content', '')[:200]}...") 
+        print(f"Status: Success")
+        print(f"Message: {results.get('message', 'Prediction completed.')}")
+        print(f"Project ID: {results.get('project_id')}")
+        print(f"PDB File Path: {results.get('pdb_file_path')}")
+        print("Model Details:")
+        model_details = results.get("model_details", {})
+        for key, value in model_details.items():
+            if value is not None:
+                 print(f"  - {key.replace('_', ' ').capitalize()}: {value}")
+
+if __name__ == '__main__':
+    # The example usage block is removed as the main() function now handles CLI execution.
+    # If you want to run examples, you would now use the command line.
+    main() 
