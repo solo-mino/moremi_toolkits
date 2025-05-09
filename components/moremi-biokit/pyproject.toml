@@ -66,7 +66,9 @@ package-data = {
 "moremi_biokit" = [
     "assets/fonts/*.ttf", 
     "assets/images/*.png",
-    "proteins/utils/*.csv", 
+    "proteins/utils/*.csv",
+    "test_pdb_targets/proteins/*.pdb", 
+    "test_pdb_targets/smiles/*.pdb", 
 ]
 
 # Example of excluding files (if needed)

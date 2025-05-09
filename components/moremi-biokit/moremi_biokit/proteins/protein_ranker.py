@@ -776,6 +776,7 @@ class ProteinRanker:
             return rankings_file
         return None
 
+    # TODO: will be deleted 
     def generate_basic_ranking_report(self, csv_file: str, output_path: str):
         """
         Generate a basic PDF ranking report without relying on protein_report_generator.

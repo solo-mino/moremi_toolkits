@@ -13,7 +13,7 @@ from enum import Enum
 import os
 import logging
 from datetime import datetime
-from .utils import pdb_fetcher
+import pdb_fetcher
 import random
 
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
@@ -24,8 +24,6 @@ from .analysis_tools import (
     predict_glycosylation, predict_structure, predict_bcell_epitopes,
     predict_developability, predict_conservancy, predict_binding_affinity, predict_immunogenicity
 )
-
-
 
 class MetricCategory(Enum):
     """Categories of metrics based on the comprehensive breakdown"""
@@ -239,7 +237,8 @@ class ProteinValidator:
 
         elif not target_antigen_pdb_id: # Only log if it wasn't explicitly set to None/empty
             logging.info("No target_antigen_pdb_id selected or available.")
-        
+       
+    # TODO: will be deleted after some confirming some review 
     def calculate_weighted_scores(self, metrics: Dict[str, Any]) -> Tuple[Dict[str, float], float]:
         """Calculate weighted scores for each metric category"""
         weighted_scores = {}
@@ -596,6 +595,7 @@ class ProteinValidator:
             # Return whatever results we've got so far, if any
             return results if 'results' in locals() else []
     
+    # TODO: this so will be deleted after some confirmations
     def save_result(self, metrics: ProteinMetrics, output_dir: str):
         """Save individual protein metrics to a file"""
         
@@ -677,7 +677,8 @@ class ProteinValidator:
         
         logging.info(f"✅ Successfully processed {len(successful)} out of {len(results)} proteins")
         return successful
-
+    
+    # TODO: add option for validation single string 
     def validate_proteins(self, sequence_list: List[str]) -> List[ProteinMetrics]:
         """
         Validate a list of protein sequences and return valid proteins with metrics.

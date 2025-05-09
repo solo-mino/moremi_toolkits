@@ -24,7 +24,18 @@ Example Usage:
     >>> from moremi_biokit import smiles
     >>> processor = smiles.BatchMoleculeProcessor("input.smi", "output_dir")
     >>> # processor.process_batch()
+    
+    To access the proteins subpackage directly:
+    >>> from moremi_biokit import proteins
+    >>> processor = proteins.BatchProteinProcessor("input.txt", "output_dir")
+    >>> # processor.process_btach()
 """
+from .pdb_fetcher import (
+    list_internal_pdb_ids,
+    get_internal_pdb_path,
+    read_internal_pdb,
+    fetch_pdb
+)
 
 # Import and re-export key components from the smiles subpackage
 from .smiles import (
@@ -37,9 +48,20 @@ from .smiles import (
     ScoringConfig
 )
 
+from .proteins import (
+    BatchAntibodyProcessor,
+    ProteinValidator,
+    ProteinRanker,
+    MetricCategory,
+    ProcessingResult,
+    ProteinMetrics,
+    ScoringConfig,
+)
+
 # Also make the subpackages themselves available
 from . import smiles
-# from . import proteins # When proteins module is ready
+from . import proteins
+from . import connectors
 
 __all__ = [
     # From smiles subpackage
@@ -51,10 +73,25 @@ __all__ = [
     "MetricCategory",
     "ScoringConfig",
     
+    "BatchAntibodyProcessor",
+    "ProteinValidator",
+    "ProteinRanker",
+    "MetricCategory",
+    "ProcessingResult",
+    "ProteinMetrics",
+    "ScoringConfig",
+    
     # Subpackages
     "smiles",
-    # "proteins", # When proteins module is ready
+    "proteins",
+    "connectors",
+    
+    # PDB Fetcher functions
+    "list_internal_pdb_ids",
+    "get_internal_pdb_path",
+    "read_internal_pdb",
+    "fetch_pdb",
+
 ]
 
-# Define package version (consider centralizing this, e.g., in pyproject.toml and reading here)
 __version__ = "0.1.0"
