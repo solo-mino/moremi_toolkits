@@ -1,6 +1,6 @@
 
 """
-    Original monolithic file containing various antibody analysis functions.
+    Original monolithic file containing various protein analysis functions.
     
     NOTE: This file is being refactored. Functions are being moved to 
     dedicated modules within this directory (e.g., blast_analyzer.py, 

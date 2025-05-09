@@ -1,7 +1,7 @@
 """
-Predicts antibody stability based on amino acid composition.
+Predicts protein stability based on amino acid composition.
 
-This module provides a simplified model to estimate antibody stability,
+This module provides a simplified model to estimate protein stability,
 represented by a stability score and an estimated melting temperature (Tm).
 It considers the contribution of generally stabilizing and destabilizing residues.
 """

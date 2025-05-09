@@ -1,7 +1,7 @@
 """
 Antibody Ranker V1
 
-This module implements a comprehensive scoring system for antibodies based on
+This module implements a comprehensive scoring system for proteins based on
 their physicochemical, structural, and functional properties. It provides normalized 
 scoring (0-1) for each property and combines them with weighted scoring for final ranking.
 
@@ -19,8 +19,8 @@ import numpy as np
 from datetime import datetime
 import os
 from dataclasses import dataclass
-from .antibody_validator import (
-    AntibodyMetrics, MetricCategory, MetricRanges, AntibodyValidator
+from .protein_validator import (
+    ProteinMetrics, MetricCategory, MetricRanges, ProteinValidator
 )
 from pathlib import Path
 import logging
@@ -30,22 +30,22 @@ import sys
 
 # Try to import report generators, but don't fail if they're not available
 try:
-    from .reports.antibody_enhanced_report_generator import generate_enhanced_report
+    from .reports.protein_enhanced_report_generator import generate_enhanced_report
     enhanced_report_available = True
 except ImportError:
-    logging.warning("antibody_enhanced_report_generator not found")
+    logging.warning("protein_enhanced_report_generator not found")
     enhanced_report_available = False
 
 try:
-    from .reports.antibody_report_generator import generate_ranking_report as gen_ranking_report
+    from .reports.protein_report_generator import generate_ranking_report as gen_ranking_report
     ranking_report_available = True
 except ImportError:
-    logging.warning("antibody_report_generator not found")
+    logging.warning("protein_report_generator not found")
     ranking_report_available = False
 
 @dataclass
 class ScoringConfig:
-    """Configuration for antibody property scoring calculations"""
+    """Configuration for protein property scoring calculations"""
     
     # Weights for different categories based on importance
     category_weights = {
@@ -137,16 +137,16 @@ class ScoringConfig:
         }
     }
 
-class AntibodyRanker:
-    """Enhanced antibody ranker implementing comprehensive scoring system"""
+class ProteinRanker:
+    """Enhanced protein ranker implementing comprehensive scoring system"""
     
     def __init__(self, config: Optional[ScoringConfig] = None, generate_pdf: bool = True, generate_csv: bool = True):
         """Initialize ranker with configuration and report generation flags.
 
         Args:
             config (Optional[ScoringConfig]): Scoring configuration.
-            generate_pdf (bool): Whether to generate PDF reports for individual antibodies.
-            generate_csv (bool): Whether to generate CSV reports for individual antibodies.
+            generate_pdf (bool): Whether to generate PDF reports for individual protein.
+            generate_csv (bool): Whether to generate CSV reports for individual protein.
         """
         self.config = config or ScoringConfig()
         self.ranges = MetricRanges()
@@ -157,8 +157,8 @@ class AntibodyRanker:
         
         # Verify that report generators can be imported
         try:
-            importlib.import_module('.reports.antibody_enhanced_report_generator', package='moremi_biokit.antibodies')
-            importlib.import_module('.reports.antibody_report_generator', package='moremi_biokit.antibodies')
+            importlib.import_module('.reports.protein_enhanced_report_generator', package='moremi_biokit.proteins')
+            importlib.import_module('.reports.protein_report_generator', package='moremi_biokit.proteins')
             logging.debug("Report generator modules successfully imported")
         except ImportError as e:
             logging.warning(f"Could not import report generators: {str(e)}")
@@ -167,12 +167,12 @@ class AntibodyRanker:
     def set_output_directory(self, output_dir: str):
         """Set the output directory for reports"""
         self.reports_dir = Path(output_dir)
-        # Create directories for individual antibody reports and rankings
-        (self.reports_dir / "antibody_reports").mkdir(parents=True, exist_ok=True)
+        # Create directories for individual protein reports and rankings
+        (self.reports_dir / "protein_reports").mkdir(parents=True, exist_ok=True)
         (self.reports_dir / "rankings").mkdir(parents=True, exist_ok=True)
 
-    def generate_antibody_report(self, metrics: AntibodyMetrics, scores: Dict, output_dir: str, rank: int = 0) -> Dict[str, Optional[Path]]:
-        """Generate enhanced report for a single antibody based on instance flags.
+    def generate_protein_report(self, metrics: ProteinMetrics, scores: Dict, output_dir: str, rank: int = 0) -> Dict[str, Optional[Path]]:
+        """Generate enhanced report for a single protein based on instance flags.
 
         Returns:
             Dict[str, Optional[Path]]: Dictionary of generated report paths ('pdf', 'csv').
@@ -182,8 +182,8 @@ class AntibodyRanker:
                 raise ValueError("Invalid metrics object or missing sequence")
 
             # Create the main output directories
-            antibody_reports_dir = os.path.join(output_dir, "antibody_reports")
-            os.makedirs(antibody_reports_dir, exist_ok=True)
+            protein_reports_dir = os.path.join(output_dir, "protein_reports")
+            os.makedirs(protein_reports_dir, exist_ok=True)
             
             # Check if enhanced report generator is available
             if not enhanced_report_available:
@@ -191,7 +191,7 @@ class AntibodyRanker:
                 return {"pdf": None, "csv": None}
 
             # Prepare data for report - safely serialize all complex data types
-            antibody_data = {
+            protein_data = {
                 "sequence": metrics.sequence,
                 "antigen": metrics.antigen,
                 "molecular_formula": metrics.molecular_formula,
@@ -212,7 +212,7 @@ class AntibodyRanker:
             }
             
             # Add raw and weighted scores
-            antibody_data["category_scores"] = {
+            protein_data["category_scores"] = {
                 "raw": {
                     key.replace(' ', '_').lower(): value 
                     for key, value in scores.get('category_scores', {}).items()
@@ -222,20 +222,20 @@ class AntibodyRanker:
                     for key, value in scores.get('category_scores', {}).items()
                 }
             }
-            antibody_data["total_score"] = scores.get('overall_score', 0.0)
+            protein_data["total_score"] = scores.get('overall_score', 0.0)
 
-            # Generate enhanced report for individual antibody
+            # Generate enhanced report for individual protein
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
             try:
                 # First attempt with full data
                 report_paths = generate_enhanced_report(
-                    antibody_data, 
-                    antibody_reports_dir, 
+                    protein_data, 
+                    protein_reports_dir, 
                     generate_pdf=self.generate_pdf, 
                     generate_csv=self.generate_csv
                 )
-                logging.info(f"Generated enhanced report for antibody {metrics.sequence[:20]}... in {antibody_reports_dir}")
+                logging.info(f"Generated enhanced report for protein {metrics.sequence[:20]}... in {protein_reports_dir}")
                 return report_paths
             except Exception as e:
                 logging.error(f"Error in enhanced report generation: {str(e)}")
@@ -249,25 +249,25 @@ class AntibodyRanker:
                         "molecular_formula": metrics.molecular_formula,
                         "molecular_weight": metrics.molecular_weight,
                         "rank": rank,
-                        "category_scores": antibody_data["category_scores"],
-                        "total_score": antibody_data["total_score"],
+                        "category_scores": protein_data["category_scores"],
+                        "total_score": protein_data["total_score"],
                         "warnings": [f"Report simplified due to error: {str(e)}"]
                     }
                     
                     report_paths = generate_enhanced_report(
                         simplified_data, 
-                        antibody_reports_dir,
+                        protein_reports_dir,
                         generate_pdf=self.generate_pdf, 
                         generate_csv=self.generate_csv
                     )
-                    logging.warning(f"Generated simplified report for antibody {metrics.sequence[:20]}...")
+                    logging.warning(f"Generated simplified report for protein {metrics.sequence[:20]}...")
                     return report_paths
                 except Exception as e2:
                     logging.error(f"Failed to generate simplified report: {str(e2)}")
                     return {"pdf": None, "csv": None}
             
         except Exception as e:
-            logging.error(f"Failed to generate report for antibody {metrics.sequence[:20]}...")
+            logging.error(f"Failed to generate report for protein {metrics.sequence[:20]}...")
             logging.error(f"Error details: {str(e)}")
             return {"pdf": None, "csv": None}
 
@@ -356,9 +356,9 @@ class AntibodyRanker:
                     logging.warning(f"Metric {metric} score {score} outside valid range [0,1]")
                     scores['metric_scores'][category][metric] = max(0.0, min(1.0, score))
 
-    def calculate_overall_score(self, metrics: AntibodyMetrics) -> Dict[str, Any]:
-        """Calculate overall score and category scores for an antibody"""
-        logging.debug(f"Calculating scores for antibody {metrics.sequence[:20]}...")
+    def calculate_overall_score(self, metrics: ProteinMetrics) -> Dict[str, Any]:
+        """Calculate overall score and category scores for an protein"""
+        logging.debug(f"Calculating scores for protein {metrics.sequence[:20]}...")
         
         category_scores = {}
         metric_scores = {}
@@ -548,26 +548,26 @@ class AntibodyRanker:
         self._validate_scores(scores)
         return scores
 
-    def rank_antibodies(self, metrics_list: Union[List[AntibodyMetrics], AntibodyMetrics]) -> pd.DataFrame:
+    def rank_proteins(self, metrics_list: Union[List[ProteinMetrics], ProteinMetrics]) -> pd.DataFrame:
         """
-        Rank antibodies based on their metrics and generate individual reports.
+        Rank proteins based on their metrics and generate individual reports.
         """
         if not metrics_list:
-            logging.warning("⚠️ No antibodies to rank!")
+            logging.warning("⚠️ No proteins to rank!")
             return pd.DataFrame()
 
-        logging.info(f"🎯 Ranking {len(metrics_list)} antibodies...")
+        logging.info(f"🎯 Ranking {len(metrics_list)} proteins...")
         
-        # Process each antibody
-        all_antibodies = []
-        antibody_scores = {}  # Store scores for later use
-        failed_antibodies = []  # Track antibodies that failed during ranking
+        # Process each protein
+        all_proteins = []
+        protein_scores = {}  # Store scores for later use
+        failed_proteins = []  # Track proteins that failed during ranking
         
         for i, metrics in enumerate(tqdm(metrics_list, desc="📊 Calculating scores", unit="ab")):
             try:
                 # Calculate scores
                 scores = self.calculate_overall_score(metrics)
-                antibody_scores[metrics.sequence] = scores  # Store scores by sequence
+                protein_scores[metrics.sequence] = scores  # Store scores by sequence
                 
                 # Create row with all required columns
                 row = {
@@ -626,36 +626,36 @@ class AntibodyRanker:
                     'weighted_developability_score': scores['category_scores'].get('Developability', 0.0) * self.config.category_weights[MetricCategory.DEVELOPABILITY],
                 }
                 
-                all_antibodies.append(row)
-                logging.debug(f"✅ Successfully ranked antibody #{i+1}: {metrics.sequence[:20]}...")
+                all_proteins.append(row)
+                logging.debug(f"✅ Successfully ranked protein #{i+1}: {metrics.sequence[:20]}...")
                 
             except Exception as e:
                 error_msg = f"Error calculating scores: {str(e)}"
-                logging.error(f"❌ Failed to rank antibody #{i+1} ({metrics.sequence[:20]}...): {error_msg}")
-                failed_antibodies.append({
+                logging.error(f"❌ Failed to rank protein #{i+1} ({metrics.sequence[:20]}...): {error_msg}")
+                failed_proteins.append({
                     'sequence': metrics.sequence[:50] + '...' if len(metrics.sequence) > 50 else metrics.sequence,
                     'error': error_msg
                 })
         
-        # Log failed antibodies during ranking
-        if failed_antibodies:
-            logging.warning(f"⚠️ {len(failed_antibodies)} antibodies failed during ranking")
+        # Log failed proteins during ranking
+        if failed_proteins:
+            logging.warning(f"⚠️ {len(failed_proteins)} proteins failed during ranking")
             if self.reports_dir:
                 failed_ranking_path = os.path.join(self.reports_dir, "failed_during_ranking.json")
                 try:
                     import json
                     with open(failed_ranking_path, 'w') as f:
-                        json.dump(failed_antibodies, f, indent=2)
+                        json.dump(failed_proteins, f, indent=2)
                     logging.info(f"❌ Failed ranking details saved to {failed_ranking_path}")
                 except Exception as e:
                     logging.error(f"❌ Could not save failed ranking details: {str(e)}")
         
         # Create DataFrame with results
-        if not all_antibodies:
-            logging.warning("⚠️ No antibodies could be successfully ranked!")
+        if not all_proteins:
+            logging.warning("⚠️ No proteins could be successfully ranked!")
             return pd.DataFrame()
             
-        self.df = pd.DataFrame(all_antibodies)
+        self.df = pd.DataFrame(all_proteins)
         
         # Sort by total score
         self.df.sort_values('total_score', ascending=False, inplace=True)
@@ -682,22 +682,22 @@ class AntibodyRanker:
                             break
                     
                     if matching_metrics:
-                        scores = antibody_scores.get(row.sequence)
+                        scores = protein_scores.get(row.sequence)
                         if scores:
-                            logging.info(f"📝 Generating enhanced report for antibody {matching_metrics.sequence[:20]}... (Rank {idx})")
-                            report_paths_dict = self.generate_antibody_report(matching_metrics, scores, str(self.reports_dir), idx)
+                            logging.info(f"📝 Generating enhanced report for protein {matching_metrics.sequence[:20]}... (Rank {idx})")
+                            report_paths_dict = self.generate_protein_report(matching_metrics, scores, str(self.reports_dir), idx)
                             if report_paths_dict and any(report_paths_dict.values()): # Check if any report was generated
                                 report_success_count += 1
                             else:
                                 report_fail_count += 1
                         else:
-                            logging.warning(f"⚠️ No scores found for antibody {row.sequence[:20]}...")
+                            logging.warning(f"⚠️ No scores found for protein {row.sequence[:20]}...")
                             report_fail_count += 1
                     else:
-                        logging.warning(f"⚠️ No matching metrics found for antibody in row {idx}")
+                        logging.warning(f"⚠️ No matching metrics found for protein in row {idx}")
                         report_fail_count += 1
                 except Exception as e:
-                    logging.error(f"Error generating report for antibody {idx}: {str(e)}")
+                    logging.error(f"Error generating report for protein {idx}: {str(e)}")
                     report_fail_count += 1
             
             logging.info(f"❌ Report generation: {report_success_count} successful, {report_fail_count} failed")
@@ -738,11 +738,11 @@ class AntibodyRanker:
 
         If rankings have been calculated (self.df exists), this method converts
         the DataFrame to a list of dictionaries, where each dictionary 
-        represents an antibody and its scores/metrics.
+        represents an protein and its scores/metrics.
 
         Returns:
             Optional[List[Dict[str, Any]]]: A list of dictionaries representing 
-                                            the ranked antibodies, or None if 
+                                            the ranked proteins, or None if 
                                             no ranking has been performed yet.
         """
         if self.df is not None:
@@ -778,7 +778,7 @@ class AntibodyRanker:
 
     def generate_basic_ranking_report(self, csv_file: str, output_path: str):
         """
-        Generate a basic PDF ranking report without relying on antibody_report_generator.
+        Generate a basic PDF ranking report without relying on protein_report_generator.
         This is a fallback method used when the import fails.
         """
         try:
@@ -803,7 +803,7 @@ class AntibodyRanker:
             pdf.set_font('Arial', 'B', 14)
             pdf.cell(0, 10, 'Summary', 0, 1, 'L')
             pdf.set_font('Arial', '', 10)
-            pdf.cell(0, 7, f'Number of antibodies: {len(df)}', 0, 1, 'L')
+            pdf.cell(0, 7, f'Number of proteins: {len(df)}', 0, 1, 'L')
             
             if len(df) > 0:
                 pdf.cell(0, 7, f'Average score: {df["total_score"].mean():.3f}', 0, 1, 'L')
@@ -812,7 +812,7 @@ class AntibodyRanker:
             
             # Add ranking table - Top 10 only
             pdf.set_font('Arial', 'B', 14)
-            pdf.cell(0, 10, 'Top Ranked Antibodies', 0, 1, 'L')
+            pdf.cell(0, 10, 'Top Ranked proteins', 0, 1, 'L')
             
             # Define columns to show
             display_cols = ['total_score', 'molecular_formula', 'molecular_weight']
@@ -856,7 +856,7 @@ class AntibodyRanker:
             return False
             
     def generate_ranking_report(self, csv_file: str, output_dir: str, timestamp: str):
-        """Generate ranking report for all antibodies"""
+        """Generate ranking report for all proteins"""
         try:
             # Create rankings directory
             rankings_dir = Path(output_dir) / "rankings"
@@ -912,25 +912,25 @@ class AntibodyRanker:
         else:
             return obj
 
-def rank_antibodies_from_metrics(
-    antibody_sequences: str,
+def rank_proteins_from_metrics(
+    protein_sequences: str,
     output_dir: str,
     config: Optional[ScoringConfig] = None,
     generate_pdf: bool = True,  # Add flags here for the standalone function
     generate_csv: bool = True   # Add flags here for the standalone function
 ) -> pd.DataFrame:
     """
-    Main function to rank antibodies from metrics file.
+    Main function to rank proteins from metrics file.
     
     Args:
-        antibody_sequences: Path to file containing antibody sequences
+        protein_sequences: Path to file containing protein sequences
         output_dir: Directory to save ranking reports
         config: Optional custom scoring configuration
-        generate_pdf: Whether to generate PDF reports for individual antibodies.
-        generate_csv: Whether to generate CSV reports for individual antibodies.
+        generate_pdf: Whether to generate PDF reports for individual proteins.
+        generate_csv: Whether to generate CSV reports for individual proteins.
         
     Returns:
-        DataFrame with ranked antibodies
+        DataFrame with ranked proteins
     """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
@@ -960,26 +960,26 @@ def rank_antibodies_from_metrics(
         logging.info(f"Added {bio_v010_dir} to Python path")
     
     # Initialize validator and ranker
-    ranker = AntibodyRanker(config, generate_pdf=generate_pdf, generate_csv=generate_csv)
+    ranker = ProteinRanker(config, generate_pdf=generate_pdf, generate_csv=generate_csv)
     ranker.set_output_directory(output_dir)
-    validator = AntibodyValidator(pdb_files_path=f"./{output_dir}/pdbs")
+    validator = ProteinValidator(pdb_files_path=f"./{output_dir}/pdbs")
     
-    # Process antibodies and handle failures gracefully
-    results = validator.process_antibodies(antibody_sequences, output_dir)
+    # Process proteins and handle failures gracefully
+    results = validator.process_proteins(protein_sequences, output_dir)
     metrics_list = validator.get_successful_metrics(results)
     
-    # Track successful and failed antibodies
-    processed_antibodies = len(results)
-    successful_antibodies = len(metrics_list)
-    failed_antibodies = processed_antibodies - successful_antibodies
+    # Track successful and failed proteins
+    processed_proteins = len(results)
+    successful_proteins = len(metrics_list)
+    failed_proteins = processed_proteins - successful_proteins
     
-    # Create a file with information about failed antibodies
-    failed_antibodies_path = os.path.join(output_dir, "failed_antibodies.txt")
-    with open(failed_antibodies_path, 'w') as f:
-        f.write("======== Failed Antibodies ========\n")
-        f.write(f"Total processed: {processed_antibodies}\n")
-        f.write(f"Failed: {failed_antibodies}\n\n")
-        f.write("Details of failed antibodies:\n")
+    # Create a file with information about failed proteins
+    failed_proteins_path = os.path.join(output_dir, "failed_proteins.txt")
+    with open(failed_proteins_path, 'w') as f:
+        f.write("======== Failed proteins ========\n")
+        f.write(f"Total processed: {processed_proteins}\n")
+        f.write(f"Failed: {failed_proteins}\n\n")
+        f.write("Details of failed proteins:\n")
         f.write("--------------------------------\n\n")
         
         for result in results:
@@ -987,48 +987,48 @@ def rank_antibodies_from_metrics(
                 f.write(f"Sequence: {result.sequence[:50]}...\n")
                 f.write(f"Error: {result.error}\n\n")
     
-    logging.info(f"Total antibodies processed: {processed_antibodies}")
-    logging.info(f"Successful antibodies: {successful_antibodies}")
-    logging.info(f"Failed antibodies: {failed_antibodies}")
-    logging.info(f"Failed antibodies information saved to: {failed_antibodies_path}")
+    logging.info(f"Total proteins processed: {processed_proteins}")
+    logging.info(f"Successful proteins: {successful_proteins}")
+    logging.info(f"Failed proteins: {failed_proteins}")
+    logging.info(f"Failed proteins information saved to: {failed_proteins_path}")
     
     if not metrics_list:
-        logging.warning("No valid antibodies found. Cannot proceed with ranking.")
-        # Create an empty report to indicate processing completed but no valid antibodies were found
-        empty_report_path = os.path.join(output_dir, "no_valid_antibodies.txt")
+        logging.warning("No valid proteins found. Cannot proceed with ranking.")
+        # Create an empty report to indicate processing completed but no valid proteins were found
+        empty_report_path = os.path.join(output_dir, "no_valid_proteins.txt")
         with open(empty_report_path, 'w') as f:
-            f.write("No valid antibodies found to rank.\n")
-            f.write(f"Total processed: {processed_antibodies}\n")
-            f.write(f"All processing failed. See {failed_antibodies_path} for details.\n")
+            f.write("No valid proteins found to rank.\n")
+            f.write(f"Total processed: {processed_proteins}\n")
+            f.write(f"All processing failed. See {failed_proteins_path} for details.\n")
         
-        return pd.DataFrame()  # Return empty DataFrame since no valid antibodies
+        return pd.DataFrame()  # Return empty DataFrame since no valid proteins
     
-    # Rank antibodies and generate reports
+    # Rank proteins and generate reports
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     try:
-        # Try to rank antibodies - even if there's just one
-        rankings = ranker.rank_antibodies(metrics_list)
+        # Try to rank proteins - even if there's just one
+        rankings = ranker.rank_proteins(metrics_list)
         
         # Save and report results
         csv_file = ranker.save_rankings(Path(output_dir), timestamp)
         pdf_file = ranker.generate_ranking_report(str(csv_file), output_dir, timestamp)
         
-        # Generate a simple text report that includes info about failed antibodies
+        # Generate a simple text report that includes info about failed proteins
         txt_report_path = os.path.join(output_dir, f"simple_report_{timestamp}.txt")
         with open(txt_report_path, 'w') as f:
             f.write("======================================\n")
             f.write("       ANTIBODY RANKING RESULTS       \n")
             f.write("======================================\n\n")
             f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            f.write(f"Number of antibodies ranked: {len(rankings)}\n")
-            f.write(f"Number of antibodies that failed: {failed_antibodies}\n\n")
+            f.write(f"Number of proteins ranked: {len(rankings)}\n")
+            f.write(f"Number of proteins that failed: {failed_proteins}\n\n")
             
             if len(rankings) > 0:
                 f.write(f"Average score: {rankings['total_score'].mean():.3f}\n")
                 f.write(f"Score range: {rankings['total_score'].min():.3f} - {rankings['total_score'].max():.3f}\n\n")
                 
-                f.write("TOP 5 ANTIBODIES (or all if less than 5):\n")
+                f.write("TOP 5 proteins (or all if less than 5):\n")
                 f.write("----------------\n")
                 for i, row in rankings.head(min(5, len(rankings))).iterrows():
                     f.write(f"{i+1}. Score: {row['total_score']:.3f}, Formula: {row['molecular_formula']}\n")
@@ -1040,15 +1040,15 @@ def rank_antibodies_from_metrics(
             f.write(f"- CSV file: {csv_file}\n")
             f.write(f"- Ranking report: {pdf_file}\n")
             f.write(f"- Log file: {log_file}\n")
-            f.write(f"- Failed antibodies: {failed_antibodies_path}\n")
+            f.write(f"- Failed proteins: {failed_proteins_path}\n")
         
         logging.info(f"\nRanking results:")
-        logging.info(f"- Ranked antibodies: {len(rankings)}")
-        logging.info(f"- Failed antibodies: {failed_antibodies}")
+        logging.info(f"- Ranked proteins: {len(rankings)}")
+        logging.info(f"- Failed proteins: {failed_proteins}")
         logging.info(f"- CSV file: {csv_file}")
         logging.info(f"- Ranking report: {pdf_file}")
         logging.info(f"- Simple text report: {txt_report_path}")
-        logging.info(f"- Individual reports: {output_dir}/antibody_reports/")
+        logging.info(f"- Individual reports: {output_dir}/protein_reports/")
         
         return rankings
         
@@ -1063,9 +1063,9 @@ def rank_antibodies_from_metrics(
             f.write("======================================\n\n")
             f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"An error occurred during the ranking process: {str(e)}\n\n")
-            f.write(f"Number of successful antibodies that were processed: {successful_antibodies}\n")
-            f.write(f"Number of antibodies that failed: {failed_antibodies}\n\n")
-            f.write(f"Failed antibodies list: {failed_antibodies_path}\n")
+            f.write(f"Number of successful proteins that were processed: {successful_proteins}\n")
+            f.write(f"Number of proteins that failed: {failed_proteins}\n\n")
+            f.write(f"Failed proteins list: {failed_proteins_path}\n")
         
         logging.info(f"Fallback report generated: {fallback_report_path}")
         
@@ -1081,8 +1081,8 @@ def rank_antibodies_from_metrics(
 
 if __name__ == "__main__":
     # Example usage
-    antibody_sequences = "example_antibodies.txt"
+    protein_sequences = "example_proteins.txt"
     output_dir = "ranking_results"
     # Pass flags to the main function
-    rankings = rank_antibodies_from_metrics(antibody_sequences, output_dir, generate_pdf=True, generate_csv=True)
-    print(f"Ranked {len(rankings)} antibodies successfully")
+    rankings = rank_proteins_from_metrics(protein_sequences, output_dir, generate_pdf=True, generate_csv=True)
+    print(f"Ranked {len(rankings)} proteins successfully")

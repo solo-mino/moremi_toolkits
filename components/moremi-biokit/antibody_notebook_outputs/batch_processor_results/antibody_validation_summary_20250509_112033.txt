@@ -1,0 +1,11 @@
+Antibody Validation Summary
+=========================
+
+Date: 2025-05-09 11:20:33
+
+Overall Statistics:
+-----------------
+Total antibodies processed: 4
+Successfully processed: 0
+Failed: 4
+

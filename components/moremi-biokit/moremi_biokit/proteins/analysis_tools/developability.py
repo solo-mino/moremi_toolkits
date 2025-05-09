@@ -244,14 +244,14 @@ def predict_developability(
     quick_mode: bool = True,
     sabdab_csv_path: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Predict the developability of an antibody sequence by comparing it with known antibodies.
+    """Predict the developability of an protein sequence by comparing it with known proteins.
 
     This function utilizes the AntibodyComparisonTool to search a local SAbDab-derived 
-    database for similar antibody sequences and provides a developability score based on 
-    the status and clinical trial phase of matched antibodies.
+    database for similar protein sequences and provides a developability score based on 
+    the status and clinical trial phase of matched proteins.
 
     Args:
-        sequence (str): The antibody sequence to analyze (heavy or light chain).
+        sequence (str): The protein sequence to analyze (heavy or light chain).
         similarity_threshold (float, optional): Minimum sequence identity threshold 
             for a match if not using progressive search. Defaults to 0.7.
         progressive_threshold (Optional[Tuple[float, float]], optional): 
@@ -266,15 +266,15 @@ def predict_developability(
 
     Returns:
         Dict[str, Any]: A dictionary containing developability prediction results:
-            - "matched_antibodies_df" (pd.DataFrame): DataFrame of matching antibodies 
+            - "matched_proteins_df" (pd.DataFrame): DataFrame of matching proteins 
               from SAbDab with their details and sequence identity.
             - "search_summary" (Dict[str, Any]): 
-                - "has_active_matches" (bool): True if any matched antibody is 'Active'.
+                - "has_active_matches" (bool): True if any matched protein is 'Active'.
                 - "threshold_used" (float): The final similarity threshold that yielded matches.
                 - "search_time_seconds" (float): Time taken for the search.
-                - "matches_found_count" (int): Number of similar antibodies found.
+                - "matches_found_count" (int): Number of similar proteins found.
             - "developability_score" (float): A score (0-1) based on the proportion of 
-              matched antibodies that are 'Active' and in 'Phase-III' or 'Approved' 
+              matched proteins that are 'Active' and in 'Phase-III' or 'Approved' 
               clinical trials.
             - "performance_statistics" (Dict[str, int]): Statistics from the search process.
             - "report_string" (str): A human-readable summary of the findings.
@@ -288,7 +288,7 @@ def predict_developability(
     except Exception as e:
         return {
             "error": f"Failed to initialize AntibodyComparisonTool: {e}",
-            "matched_antibodies_df": pd.DataFrame(),
+            "matched_proteins_df": pd.DataFrame(),
             "search_summary": {},
             "developability_score": 0.0,
             "performance_statistics": {},
@@ -299,7 +299,7 @@ def predict_developability(
     if not isinstance(sequence, str) or not sequence.strip() or len(sequence.strip()) < 10:
         return {
             "error": "Invalid sequence: Must be a string with at least 10 characters.",
-            "matched_antibodies_df": pd.DataFrame(),
+            "matched_proteins_df": pd.DataFrame(),
             "search_summary": {
                 "has_active_matches": False,
                 "threshold_used": similarity_threshold,
@@ -323,7 +323,7 @@ def predict_developability(
                 progressive_threshold[0] >= progressive_threshold[1]):
             return {
                 "error": "Invalid progressive_threshold. Must be a tuple (start_float, end_float) with start >= end.",
-                 "matched_antibodies_df": pd.DataFrame(), "search_summary": {}, "developability_score": 0.0, 
+                 "matched_proteins_df": pd.DataFrame(), "search_summary": {}, "developability_score": 0.0, 
                  "performance_statistics": {}, "report_string": "Invalid progressive threshold parameter."
             }
 
@@ -348,7 +348,7 @@ def predict_developability(
     search_time_taken = time.time() - start_time
     num_matches_found = len(matched_df)
 
-    # Calculate developability score and check for active antibodies
+    # Calculate developability score and check for active proteins
     has_active = False
     developability_score_val = 0.0
     active_matches_count = 0
@@ -376,20 +376,20 @@ def predict_developability(
     # Generate report string
     report_lines = []
     if matched_df.empty:
-        report_lines.append(f"No similar antibodies found (search took {search_time_taken:.2f}s at threshold {threshold_actually_used:.2f}).")
+        report_lines.append(f"No similar proteins found (search took {search_time_taken:.2f}s at threshold {threshold_actually_used:.2f}).")
         report_lines.append("Suggestions to find matches:")
         if not progressive_threshold:
             report_lines.append(f"  - Try progressive search: e.g., progressive_threshold=({similarity_threshold}, {max(0.3, similarity_threshold-0.2):.1f})")
         if similarity_threshold > 0.5:
              report_lines.append(f"  - Try a lower single threshold: e.g., similarity_threshold={max(0.3, similarity_threshold-0.2):.1f}")
-        report_lines.append("  - Verify the input sequence is a valid antibody variable domain sequence.")
+        report_lines.append("  - Verify the input sequence is a valid protein variable domain sequence.")
         report_lines.append("  - Consider using quick_mode=False for a more sensitive search (slower)." if quick_mode else "")
     else:
-        report_lines.append(f"Found {num_matches_found} similar antibodies (search took {search_time_taken:.2f}s at threshold {threshold_actually_used:.2f}).")
+        report_lines.append(f"Found {num_matches_found} similar proteins (search took {search_time_taken:.2f}s at threshold {threshold_actually_used:.2f}).")
         if has_active:
-            report_lines.append(f"  - {active_matches_count} matched antibodies have an 'Active' status.")
+            report_lines.append(f"  - {active_matches_count} matched proteins have an 'Active' status.")
         else:
-            report_lines.append("  - No matched antibodies have an 'Active' status.")
+            report_lines.append("  - No matched proteins have an 'Active' status.")
         report_lines.append(f"  - Developability Score: {developability_score_val:.4f}")
     
     # Performance statistics
@@ -401,7 +401,7 @@ def predict_developability(
     report_lines.append(f"  - Quick mode used: {quick_mode}")
 
     result_dict = {
-        "matched_antibodies_df": matched_df.to_dict('records') if not matched_df.empty else [],
+        "matched_proteins_df": matched_df.to_dict('records') if not matched_df.empty else [],
         "search_summary": {
             "has_active_matches": bool(has_active),
             "threshold_used": float(threshold_actually_used),

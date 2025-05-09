@@ -7,7 +7,7 @@ DRAFT V 0.1.0
 
 Currently, `moremi-biokit` includes two main sub-packages:
 -   **`moremi_biokit.smiles`**: For handling small molecules represented by SMILES strings.
--   **`moremi_biokit.antibodies`**: For processing and analyzing antibody data.
+-   **`moremi_biokit.proteins`**: For processing and analyzing protein data.
 
 This document provides an overview of the package structure, installation, usage, and development guidelines.
 
@@ -17,7 +17,7 @@ This document provides an overview of the package structure, installation, usage
 
 ## 2. Package Structure
 
-The `moremi_biokit` package is meticulously organized to provide a clear and maintainable codebase. It contains distinct sub-packages for `smiles` and `antibodies` processing, each with its own internal structure reflecting its specific functionalities.
+The `moremi_biokit` package is meticulously organized to provide a clear and maintainable codebase. It contains distinct sub-packages for `smiles` and `proteins` processing, each with its own internal structure reflecting its specific functionalities.
 
 ```
 moremi_toolkits/               # Monorepo Root
@@ -52,7 +52,7 @@ moremi_toolkits/               # Monorepo Root
         │   │       ├── basic_generator.py
         │   │       └── enhanced_generator.py
         │   │
-        │   └── antibodies/    # Sub-package for Antibody related tools
+        │   └── proteins/    # Sub-package for Antibody related tools
         │       ├── __init__.py
         │       ├── batch_processor.py
         │       ├── validator.py
@@ -98,7 +98,7 @@ moremi_toolkits/               # Monorepo Root
             │       └── test_physicochemical.py
             │       └── ... (other property calculator tests)
             │
-            └── antibodies/    # Tests specifically for the 'moremi_biokit.antibodies' sub-package
+            └── proteins/    # Tests specifically for the 'moremi_biokit.proteins' sub-package
                 ├── __init__.py
                 ├── test_batch_processor.py
                 ├── test_validator.py
@@ -149,26 +149,26 @@ moremi_biokit/  # Top-level importable package name (installed as 'moremi-biokit
 │       └── enhanced_generator.py # Generates comprehensive PDF reports with visualizations, radar charts etc.
 │                                 # Defines EnhancedMoleculeReport class.
 │
-└── antibodies/ # Sub-package for Antibody related tools
-    ├── __init__.py             # Exports key classes like AntibodyBatchProcessor, AntibodyValidator, AntibodyRanker
+└── proteins/ # Sub-package for Antibody related tools
+    ├── __init__.py             # Exports key classes like AntibodyBatchProcessor, ProteinValidator, ProteinRanker
     │
     ├── batch_processor.py      # Contains AntibodyBatchProcessor:
-    │                           #   - Reads antibody sequences (FASTA, text).
+    │                           #   - Reads protein sequences (FASTA, text).
     │                           #   - Initializes validator & ranker.
     │                           #   - Orchestrates batch processing, ranking, and reporting.
     │
-    ├── validator.py            # Contains AntibodyValidator:
+    ├── validator.py            # Contains ProteinValidator:
     │                           #   - Validates sequence format and composition.
     │                           #   - Coordinates calls to all analysis and prediction tools.
-    │                           #   - Collects metrics into AntibodyMetrics objects.
+    │                           #   - Collects metrics into ProteinMetrics objects.
     │                           #   - May include weighted score calculation logic if not solely in Ranker.
     │
-    ├── ranker.py               # Contains AntibodyRanker:
-    │                           #   - Calculates category and overall scores based on AntibodyMetrics.
+    ├── ranker.py               # Contains ProteinRanker:
+    │                           #   - Calculates category and overall scores based on ProteinMetrics.
     │                           #   - Applies weights from a specific AntibodyScoringConfig.
-    │                           #   - Ranks antibodies.
+    │                           #   - Ranks proteins.
     │
-    ├── analysis_tools/         # Modules for specific antibody analysis and property prediction
+    ├── analysis_tools/         # Modules for specific protein analysis and property prediction
     │   ├── __init__.py         # May export individual tool functions/classes.
     │   ├── blast_analyzer.py   # Performs BLAST analysis.
     │   ├── protparam_analyzer.py # Calculates ProtParam properties (MW, pI, etc.).
@@ -182,20 +182,20 @@ moremi_biokit/  # Top-level importable package name (installed as 'moremi-biokit
     │   ├── conservancy_analyzer.py # Analyzes epitope conservancy.
     │   └── developability_assessor.py # Assesses overall developability (e.g., combining multiple parameters).
     │
-    ├── reports/                # Modules for generating reports for antibody data
+    ├── reports/                # Modules for generating reports for protein data
     │   ├── __init__.py
     │   ├── basic_generator.py  # Generates simple tabular reports.
     │   └── enhanced_generator.py # Creates comprehensive PDF reports with visualizations.
     │
-    └── utils/                  # Utility functions or data specific to antibody analysis
+    └── utils/                  # Utility functions or data specific to protein analysis
         ├── __init__.py
         └── antigens.py         # Data store or access for antigen sequences/targets used in affinity predictions.
 ``` -->
 
 ### **Explanation of Key Structural Choices:**
 
-*   **`moremi_biokit` (Root Package):** The single installable package. Its `__init__.py` could potentially re-export the main classes from `smiles` and `antibodies` for easier top-level imports if desired (e.g., `from moremi_biokit import SMILESValidator`).
-*   **`smiles/` and `antibodies/` (Sub-packages):** Clear separation of concerns. Each acts as a self-contained toolkit for its respective entity type.
+*   **`moremi_biokit` (Root Package):** The single installable package. Its `__init__.py` could potentially re-export the main classes from `smiles` and `proteins` for easier top-level imports if desired (e.g., `from moremi_biokit import SMILESValidator`).
+*   **`smiles/` and `proteins/` (Sub-packages):** Clear separation of concerns. Each acts as a self-contained toolkit for its respective entity type.
     *   **`__init__.py` in sub-packages:** These are crucial. They should import and expose the main public classes and functions from the modules within them. For example, `moremi_biokit/smiles/__init__.py` might contain:
         ```python
         from .batch_processor import SMILESBatchProcessor
@@ -204,11 +204,11 @@ moremi_biokit/  # Top-level importable package name (installed as 'moremi-biokit
         # ... and potentially key data classes like MoleculeMetrics
         ```
         This allows users to do `from moremi_biokit.smiles import SMILESValidator` instead of delving deeper.
-    *   **`batch_processor.py`, `validator.py`, `ranker.py`:** These core workflow components are present in both `smiles` and `antibodies`, tailored to their specific data types. The class names should be distinct (e.g., `SMILESValidator`, `AntibodyValidator`).
+    *   **`batch_processor.py`, `validator.py`, `ranker.py`:** These core workflow components are present in both `smiles` and `proteins`, tailored to their specific data types. The class names should be distinct (e.g., `SMILESValidator`, `ProteinValidator`).
     *   **`property_calculators/` (in `smiles`):** Groups all modules responsible for calculating specific properties of small molecules.
-    *   **`analysis_tools/` (in `antibodies`):** Analogous to `property_calculators`, this groups modules for various antibody-specific analyses and predictions.
+    *   **`analysis_tools/` (in `proteins`):** Analogous to `property_calculators`, this groups modules for various protein-specific analyses and predictions.
     *   **`reports/` (in both):** Centralizes report generation logic for each sub-package.
-    *   **`utils/` (in `antibodies`):** For utilities or data files specifically related to antibody processing (like the `antigens.py` example). A similar `utils/` could exist in `smiles/` if needed.
+    *   **`utils/` (in `proteins`):** For utilities or data files specifically related to protein processing (like the `antigens.py` example). A similar `utils/` could exist in `smiles/` if needed.
 
 ### **Impact on Usage (from Section 4):**
 
@@ -223,8 +223,8 @@ from moremi_biokit.smiles.property_calculators import physicochemical
 # metrics = smiles_validator.process_molecule("CCO").metrics
 # mw = metrics.physicochemical.molecular_weight # (Depends on MoleculeMetrics structure)
 
-# Accessing an antibody analysis tool
-from moremi_biokit.antibodies.analysis_tools import immunogenicity_predictor
+# Accessing an protein analysis tool
+from moremi_biokit.proteins.analysis_tools import immunogenicity_predictor
 # immunogenicity_score = immunogenicity_predictor.predict_t_cell_epitopes(sequence_vh, sequence_vl)
 ```
 
@@ -320,13 +320,13 @@ else:
 # print(f"RDKit Mol Weight: {mol_weight}")
 ```
 
-### 4.2. Using `moremi_biokit.antibodies` (Hypothetical)
+### 4.2. Using `moremi_biokit.proteins` (Hypothetical)
 
-This section should be filled out as the antibody tools are developed.
+This section should be filled out as the protein tools are developed.
 
 ```python
-from moremi_biokit.antibodies.sequence_analyzer import AntibodySequenceAnalyzer # Example class
-# from moremi_biokit.antibodies.processor import AntibodyDataProcessor
+from moremi_biokit.proteins.sequence_analyzer import AntibodySequenceAnalyzer # Example class
+# from moremi_biokit.proteins.processor import AntibodyDataProcessor
 
 # analyzer = AntibodySequenceAnalyzer(sequence="QVQLQESGPGLVKPSQTLSLTCAISGDSVSSNSAAWNWIRQSPSRGLEWLGRTYWRSDTKDYNPSLKSRVTISVDTSKNQFSLKLSSVTAADTAVYYCAR...")
 # print(f"Calculated pI: {analyzer.calculate_isoelectric_point()}")
@@ -382,8 +382,8 @@ authors = [
 dependencies = [
     "rdkit-pypi >= 2022.09.5", # For SMILES processing
     "pandas >= 1.3.0",         # General data handling
-    "biopython >= 1.79",       # For antibody sequence analysis (example)
-    # ... other core dependencies for SMILES or Antibodies
+    "biopython >= 1.79",       # For protein sequence analysis (example)
+    # ... other core dependencies for SMILES or proteins
 ]
 
 [project.optional-dependencies]
@@ -404,7 +404,7 @@ dev = [
 ### 5.3. Testing
 
 -   Unit tests are located in `components/moremi_biokit/tests/`.
--   Organize tests by module (e.g., `test_smiles_validator.py`, `test_antibody_sequencer.py`).
+-   Organize tests by module (e.g., `test_smiles_validator.py`, `test_protein_sequencer.py`).
 -   Aim for high test coverage.
 -   Use `pytest` (or your chosen test runner).
     ```bash

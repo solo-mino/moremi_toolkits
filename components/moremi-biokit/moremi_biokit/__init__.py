@@ -10,7 +10,7 @@ molecules represented by SMILES strings.
 
 Subpackages:
   - smiles: Tools for SMILES processing, validation, ranking, and reporting.
-  - antibodies: (Planned) Tools for antibody sequence analysis.
+  - proteins: Tools for protein sequence analysis.
 
 Example Usage:
     To use the SMILES validation tools:
@@ -39,7 +39,7 @@ from .smiles import (
 
 # Also make the subpackages themselves available
 from . import smiles
-# from . import antibodies # When antibodies module is ready
+# from . import proteins # When proteins module is ready
 
 __all__ = [
     # From smiles subpackage
@@ -53,7 +53,7 @@ __all__ = [
     
     # Subpackages
     "smiles",
-    # "antibodies", # When antibodies module is ready
+    # "proteins", # When proteins module is ready
 ]
 
 # Define package version (consider centralizing this, e.g., in pyproject.toml and reading here)

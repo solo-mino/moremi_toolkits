@@ -1,5 +1,5 @@
 """
-Performs BLAST searches for antibody sequences.
+Performs BLAST searches for protein sequences.
 
 This module provides functionality to query NCBI BLAST databases with protein sequences.
 """

@@ -1,6 +1,6 @@
-"""Antibodies Utility Subpackage.
+"""proteins Utility Subpackage.
 
-Contains helper modules for antibody analysis, such as PDB fetching.
+Contains helper modules for protein analysis, such as PDB fetching.
 """
 
 from .pdb_fetcher import (

@@ -1,7 +1,7 @@
 """
 Antibody Metrics Collector V3
 
-This module implements a comprehensive metrics collection system for antibodies based on 
+This module implements a comprehensive metrics collection system for proteins based on 
 the metrics breakdown document. This version focuses on collecting all metrics for validation
 and reporting purposes, while also calculating weighted scores for ranking.
 """
@@ -45,7 +45,7 @@ class MetricCategory(Enum):
 @dataclass
 class MetricRanges:
     """
-    Reference ranges for antibody properties based on the comprehensive metrics breakdown.
+    Reference ranges for protein properties based on the comprehensive metrics breakdown.
     These ranges are used for normalization and reporting, not for pass/fail criteria.
     """
     
@@ -114,10 +114,11 @@ class MetricRanges:
     }
 
 @dataclass
-class AntibodyMetrics:
-    """Container for all calculated metrics for an antibody"""
+class ProteinMetrics:
+    """Container for all calculated metrics for an protein"""
     sequence: str
     antigen: str
+    antigen_id: Optional[str]
     molecular_weight: float
     molecular_formula: str
     
@@ -145,6 +146,7 @@ class AntibodyMetrics:
         return {
             'sequence': self.sequence,
             'antigen':self.antigen,
+            'antigen_id': self.antigen_id,
             'molecular_weight': self.molecular_weight,
             'molecular_formula': self.molecular_formula,
             'metrics': {
@@ -167,9 +169,9 @@ class AntibodyMetrics:
 
 @dataclass
 class ProcessingResult:
-    """Container for antibody processing results"""
+    """Container for protein processing results"""
     sequence: str
-    metrics: Optional[AntibodyMetrics]
+    metrics: Optional[ProteinMetrics]
     error: Optional[str] = None
     success: bool = True
 
@@ -178,9 +180,9 @@ class ProcessingResult:
             return f"Success: {self.sequence[:20]}..."
         return f"Failed: {self.sequence[:20]}... - Error: {self.error}"
 
-class AntibodyValidator:
+class ProteinValidator:
     """
-    Enhanced antibody metrics collector that gathers comprehensive metrics
+    Enhanced protein metrics collector that gathers comprehensive metrics
     and calculates weighted scores for ranking.
     """
     
@@ -199,6 +201,7 @@ class AntibodyValidator:
         self.target_antigen_pdb_id: Optional[str] = None
         self.target_antigen_pdb_path: Optional[str] = None
 
+        # 
         if target_antigen_pdb_id:
             self.target_antigen_pdb_id = target_antigen_pdb_id
         else:
@@ -225,7 +228,7 @@ class AntibodyValidator:
                 except Exception as e:
                     logging.error(f"Error preparing antigen PDB '{self.target_antigen_pdb_id}' in '{self.pdb_files_path}': {e}")
             else:
-                logging.warning("pdb_files_path not set in AntibodyValidator; cannot prepare target antigen PDB path locally. Will rely on direct path from pdb_fetcher if available for binding.")
+                logging.warning("pdb_files_path not set in ProteinValidator; cannot prepare target antigen PDB path locally. Will rely on direct path from pdb_fetcher if available for binding.")
                 # Attempt to get a direct path if pdb_files_path is not for writing
                 fetched_info = pdb_fetcher.fetch_pdb(identifier=self.target_antigen_pdb_id, use_internal=True) # output_dir not specified
                 if fetched_info and fetched_info.get("status") == "success" and fetched_info.get("pdb_path"):
@@ -343,8 +346,8 @@ class AntibodyValidator:
         total_score = sum(weighted_scores.values())
         return weighted_scores, total_score
     
-    def process_antibody(self, sequence: str) -> ProcessingResult:
-        """Process a single antibody sequence and calculate all metrics"""
+    def process_protein(self, sequence: str) -> ProcessingResult:
+        """Process a single protein sequence and calculate all metrics"""
         try:
             # Basic sequence validation
             if not sequence or len(sequence) < 10:
@@ -365,9 +368,9 @@ class AntibodyValidator:
             metrics = {}
             
             # Print tree-style validation process header
-            logging.info(f"\n🧪 Processing antibody sequence: {sequence[:20]}...")
+            logging.info(f"\n🧪 Processing protein sequence: {sequence[:20]}...")
             logging.info(f"├── Calculating basic properties...")
-            print(f"\n🧪 Processing antibody sequence: {sequence[:20]}...")
+            print(f"\n🧪 Processing protein sequence: {sequence[:20]}...")
             print(f"├── Calculating basic properties...")
             
             # BLAST analysis
@@ -421,7 +424,7 @@ class AntibodyValidator:
             # Structure prediction
             logging.info(f"├── 🧩 Generating structural model...")
             print("├── 🧩 Generating structural model...")
-            structure_result = predict_structure(sequence, filename=molecular_formula, directory=self.pdb_files_path)
+            structure_result = predict_structure(sequence, output_pdb_filename_prefix=molecular_formula, output_directory=self.pdb_files_path)
             metrics['structure'] = structure_result
             logging.info(f"│   └── ✓ Structural model generated.")
             print("│   └── ✓ Structural model generated")
@@ -435,7 +438,7 @@ class AntibodyValidator:
                 logging.info(f"│   └── ✓ Binding affinity calculated against {self.target_antigen_pdb_id}")
                 print(f"│   └── ✓ Binding affinity calculated against {self.target_antigen_pdb_id}")
             else:
-                metrics['binding_affinity'] = {"error": "Receptor(Antigen) PDB or antibody PDB path not available"}
+                metrics['binding_affinity'] = {"error": "Receptor(Antigen) PDB or protein PDB path not available"}
                 logging.warning(f"│   └── ⚠️ Skipping binding affinity: Ligand(Antibody) PDB path: {structure_result.get('pdb_file_path')}, Receptor(Antigen) PDB path: {self.target_antigen_pdb_path}")
                 print(f"│   └── ⚠️ Skipping binding affinity: Receptor(Antigen) PDB path ({self.target_antigen_pdb_id}) not prepared or Ligand(Antibody) PDB not available.")
             
@@ -468,9 +471,10 @@ class AntibodyValidator:
             weighted_scores, total_score = self.calculate_weighted_scores(metrics)
             
             # Initialize metrics container
-            antibody_metrics = AntibodyMetrics(
+            protein_metrics = ProteinMetrics(
                 sequence=sequence,
-                antigen=self.target_antigen_pdb_id or "Unknown", # Use PDB ID as antigen identifier
+                antigen="",
+                antigen_id=self.target_antigen_pdb_id or "Unknown", # Use PDB ID as antigen identifier
                 molecular_weight=molecular_weight,
                 molecular_formula=molecular_formula,
                 blast=metrics['blast'],
@@ -489,14 +493,14 @@ class AntibodyValidator:
                 warnings=[]
             )
             
-            # logging.info(f"✅ Successfully processed antibody with score: {total_score:.3f}")
-            logging.info(f"✅ Successfully processed antibody with score")
-            # print(f"✅ Successfully processed antibody with score: {total_score:.3f}")
-            print(f"✅ Successfully processed antibody with score")
+            # logging.info(f"✅ Successfully processed protein with score: {total_score:.3f}")
+            logging.info(f"✅ Successfully processed protein with score")
+            # print(f"✅ Successfully processed protein with score: {total_score:.3f}")
+            print(f"✅ Successfully processed protein with score")
             
             return ProcessingResult(
                 sequence=sequence,
-                metrics=antibody_metrics,
+                metrics=protein_metrics,
                 success=True
             )
             
@@ -510,8 +514,8 @@ class AntibodyValidator:
                 error=str(e)
             )
 
-    def process_antibodies(self, input_file: str, output_dir: str = None) -> List[ProcessingResult]:
-        """Process multiple antibody sequences from a file and save results to output directory"""
+    def process_proteins(self, input_file: str, output_dir: str = None) -> List[ProcessingResult]:
+        """Process multiple protein sequences from a file and save results to output directory"""
         try:
             # Create results directory
             results_dir = output_dir or os.path.join(os.path.dirname(input_file), "results")
@@ -528,35 +532,35 @@ class AntibodyValidator:
                 logging.warning(f"No valid sequences found in {input_file}")
                 return []
                 
-            logging.info(f"Found {len(sequences)} antibody sequences in {input_file}")
+            logging.info(f"Found {len(sequences)} protein sequences in {input_file}")
             
             results = []
             success_count = 0
             error_count = 0
             
-            # Process each antibody
-            logging.info(f"🌲 Starting batch processing of {len(sequences)} antibodies...")
-            print(f"\n🌲 Processing {len(sequences)} antibodies from {input_file}")
+            # Process each protein
+            logging.info(f"🌲 Starting batch processing of {len(sequences)} proteins...")
+            print(f"\n🌲 Processing {len(sequences)} proteins from {input_file}")
             
             for i, sequence in enumerate(sequences):
                 try:
-                    logging.info(f"Processing antibody {i+1}/{len(sequences)}:")
-                    result = self.process_antibody(sequence)
+                    logging.info(f"Processing protein {i+1}/{len(sequences)}:")
+                    result = self.process_protein(sequence)
                     results.append(result)
                     
                     if result.success:
                         success_count += 1
-                        logging.info(f"✅ Successfully processed antibody {i+1} with score: {result.metrics.total_score:.3f}")
+                        logging.info(f"✅ Successfully processed protein {i+1} with score: {result.metrics.total_score:.3f}")
                         print(f"│  ├── {i+1}/{len(sequences)}: ✅ Success - Score: {result.metrics.total_score:.3f}")
                     else:
                         error_count += 1
-                        logging.warning(f"❌ Failed to process antibody {i+1}: {result.error}")
+                        logging.warning(f"❌ Failed to process protein {i+1}: {result.error}")
                         print(f"│  ├── {i+1}/{len(sequences)}: ❌ Error - {result.error}")
                 
                 except Exception as e:
                     error_count += 1
                     error_msg = f"Unexpected error: {str(e)}"
-                    logging.error(f"❌ Exception processing antibody {i+1}: {error_msg}")
+                    logging.error(f"❌ Exception processing protein {i+1}: {error_msg}")
                     print(f"│  ├── {i+1}/{len(sequences)}: ❌ Exception - {error_msg}")
                     # Create a failed result
                     results.append(ProcessingResult(
@@ -575,7 +579,7 @@ class AntibodyValidator:
                 detail = f"Score: {result.metrics.total_score:.3f}" if result.success else f"Error: {result.error}"
                 print(f"    ├── {i+1}: {status} {detail}")
             
-            logging.info(f"Completed processing {len(sequences)} antibodies")
+            logging.info(f"Completed processing {len(sequences)} proteins")
             logging.info(f"✅ Success: {success_count}, ❌ Failed: {error_count}")
             
             # Save results
@@ -592,8 +596,8 @@ class AntibodyValidator:
             # Return whatever results we've got so far, if any
             return results if 'results' in locals() else []
     
-    def save_result(self, metrics: AntibodyMetrics, output_dir: str):
-        """Save individual antibody metrics to a file"""
+    def save_result(self, metrics: ProteinMetrics, output_dir: str):
+        """Save individual protein metrics to a file"""
         
         # Convert metrics to dictionary and save
         metrics_dict = metrics.to_dict()
@@ -608,10 +612,11 @@ class AntibodyValidator:
         output_file = os.path.join(json_dir, f"{metrics_dict['molecular_formula']}_{timestamp}.json")
         pd.DataFrame([metrics_dict]).to_json(output_file, orient='records', indent=2)
     
+    # TODO: DELETE DO SOMETHING TO THIS GUY
     def save_summary(self, results: List[ProcessingResult], output_dir: str):
-        """Save summary of all antibody processing results"""
+        """Save summary of all protein processing results"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        summary_file = os.path.join(output_dir, f"antibody_validation_summary_{timestamp}.txt")
+        summary_file = os.path.join(output_dir, f"protein_validation_summary_{timestamp}.txt")
         
         successful = [r for r in results if r.success]
         failed = [r for r in results if not r.success]
@@ -623,7 +628,7 @@ class AntibodyValidator:
             
             f.write("Overall Statistics:\n")
             f.write("-----------------\n")
-            f.write(f"Total antibodies processed: {len(results)}\n")
+            f.write(f"Total proteins processed: {len(results)}\n")
             f.write(f"Successfully processed: {len(successful)}\n")
             f.write(f"Failed: {len(failed)}\n\n")
             
@@ -635,7 +640,7 @@ class AntibodyValidator:
                 f.write(f"Maximum score: {max(scores):.4f}\n")
                 f.write(f"Minimum score: {min(scores):.4f}\n\n")
                 
-                f.write("Top 10 Highest Scoring Antibodies:\n")
+                f.write("Top 10 Highest Scoring proteins:\n")
                 f.write("--------------------------------\n")
                 top_10 = sorted(successful, key=lambda x: x.metrics.total_score, reverse=True)[:10]
                 for result in top_10:
@@ -644,14 +649,14 @@ class AntibodyValidator:
                     f.write("-" * 50 + "\n")
         
         if failed:
-            f.write("\nFailed Antibodies:\n")
+            f.write("\nFailed proteins:\n")
             f.write("-----------------\n")
             for result in failed:
                     f.write(f"Sequence: {result.sequence[:20]}...\n")
                     f.write(f"Error: {result.error}\n")
                     f.write("-" * 50 + "\n")
 
-    def get_successful_metrics(self, results: List[ProcessingResult]) -> List[AntibodyMetrics]:
+    def get_successful_metrics(self, results: List[ProcessingResult]) -> List[ProteinMetrics]:
         """Extract only successful metrics from processing results"""
         successful = []
         failed = []
@@ -664,32 +669,32 @@ class AntibodyValidator:
                 seq_preview = result.sequence[:30] + "..." if result.sequence and len(result.sequence) > 30 else result.sequence
                 failed.append((i, seq_preview, error_msg))
         
-        # Log information about failed antibodies
+        # Log information about failed proteins
         if failed:
-            logging.warning(f"❌ {len(failed)} antibodies failed processing:")
+            logging.warning(f"❌ {len(failed)} proteins failed processing:")
             for i, seq, error in failed:
                 logging.warning(f"  - Antibody #{i+1} (seq: {seq}): {error}")
         
-        logging.info(f"✅ Successfully processed {len(successful)} out of {len(results)} antibodies")
+        logging.info(f"✅ Successfully processed {len(successful)} out of {len(results)} proteins")
         return successful
 
-    def validate_antibodies(self, sequence_list: List[str]) -> List[AntibodyMetrics]:
+    def validate_proteins(self, sequence_list: List[str]) -> List[ProteinMetrics]:
         """
-        Validate a list of antibody sequences and return valid antibodies with metrics.
+        Validate a list of protein sequences and return valid proteins with metrics.
         
         Args:
-            sequence_list: List of antibody sequences to validate
+            sequence_list: List of protein sequences to validate
             
         Returns:
-            List of AntibodyMetrics objects for valid antibodies
+            List of ProteinMetrics objects for valid proteins
         """
-        print(f"\nStarting validation of {len(sequence_list)} antibodies...")
+        print(f"\nStarting validation of {len(sequence_list)} proteins...")
         valid_metrics = []
         invalid_count = 0
         
         for idx, sequence in enumerate(sequence_list, 1):
             try:
-                print(f"\nValidating antibody {idx}/{len(sequence_list)}")
+                print(f"\nValidating protein {idx}/{len(sequence_list)}")
                 print(f"├── Sequence: {sequence[:20]}...")
                 
                 # Basic sequence validation
@@ -706,7 +711,7 @@ class AntibodyValidator:
                 
                 # Initialize metrics container with basic properties
                 current_antigen_id = self.target_antigen_pdb_id or "Unknown"
-                metrics_obj = AntibodyMetrics(
+                metrics_obj = ProteinMetrics(
                     sequence=sequence,
                     antigen=current_antigen_id, # Use PDB ID as antigen identifier
                     molecular_weight=molecular_weight,
@@ -751,7 +756,7 @@ class AntibodyValidator:
                 metrics_obj.glycosylation = predict_glycosylation(sequence)
                 
                 print(f"├── Running structure prediction...")
-                structure_prediction_result = predict_structure(sequence, filename=molecular_formula, directory=self.pdb_files_path)
+                structure_prediction_result = predict_structure(sequence, output_pdb_filename_prefix=molecular_formula, output_directory=self.pdb_files_path)
                 metrics_obj.structure = structure_prediction_result
                 
                 print(f"├── Running binding affinity prediction...")
@@ -759,8 +764,8 @@ class AntibodyValidator:
                     binding_result = predict_binding_affinity(structure_prediction_result['pdb_file_path'], self.target_antigen_pdb_path)
                     metrics_obj.binding_affinity = binding_result
                 else:
-                    metrics_obj.binding_affinity = {"error": "Antigen PDB or antibody PDB path not available for validation method"}
-                    logging.warning(f"Skipping binding affinity in validate_antibodies for {sequence[:20]}")
+                    metrics_obj.binding_affinity = {"error": "Antigen PDB or protein PDB path not available for validation method"}
+                    logging.warning(f"Skipping binding affinity in validate_proteins for {sequence[:20]}")
 
                 print(f"├── Running epitope prediction...")
                 metrics_obj.epitope = predict_bcell_epitopes(sequence)
@@ -802,9 +807,9 @@ class AntibodyValidator:
                 continue
         
         print(f"\nValidation complete:")
-        print(f"├── Total antibodies: {len(sequence_list)}")
-        print(f"├── Valid antibodies: {len(valid_metrics)}")
-        print(f"└── Invalid antibodies: {invalid_count}\n")
+        print(f"├── Total proteins: {len(sequence_list)}")
+        print(f"├── Valid proteins: {len(valid_metrics)}")
+        print(f"└── Invalid proteins: {invalid_count}\n")
         
         return valid_metrics
 
@@ -835,10 +840,10 @@ class AntibodyValidator:
             
             logging.info(f"💾 Saved {successful_count} individual results to {output_dir}")
             
-            # Save failed antibodies to a separate file
+            # Save failed proteins to a separate file
             failed_results = [r for r in results if not r.success]
             if failed_results:
-                failed_file = os.path.join(output_dir, "failed_antibodies_details.json")
+                failed_file = os.path.join(output_dir, "failed_proteins_details.json")
                 with open(failed_file, 'w') as f:
                     import json
                     # Convert to serializable format
@@ -847,7 +852,7 @@ class AntibodyValidator:
                         "error": r.error
                     } for r in failed_results]
                     json.dump(failed_data, f, indent=2)
-                logging.info(f"❌ Saved {len(failed_results)} failed antibody details to {failed_file}")
+                logging.info(f"❌ Saved {len(failed_results)} failed protein details to {failed_file}")
                 
         except Exception as e:
             logging.error(f"❌ Error saving results: {str(e)}")
@@ -856,5 +861,5 @@ class AntibodyValidator:
 
 if __name__ == "__main__":
     # Example usage
-    validator = AntibodyValidator()
-    results = validator.process_antibodies("antibodies.txt", "validation_results")
+    validator = ProteinValidator()
+    results = validator.process_proteins("proteins.txt", "validation_results")

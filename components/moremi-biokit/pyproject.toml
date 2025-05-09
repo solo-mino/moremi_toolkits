@@ -51,9 +51,10 @@ dev = [
 # SMILES tools
 convert-smiles = "moremi_biokit.smiles.utils.convert_smiles:main"
 process-smiles-batch = "moremi_biokit.smiles.batch_molecule_processor:main"
-# Antibody tools
-predict-structure = "moremi_biokit.antibodies.analysis_tools.structure_predictor:main"
-fetch-pdb = "moremi_biokit.antibodies.utils.pdb_fetcher:main"
+# Protein tools
+predict-structure = "moremi_biokit.proteins.analysis_tools.structure_predictor:main"
+fetch-pdb = "moremi_biokit.proteins.utils.pdb_fetcher:main"
+process-protein-batch = "moremi_biokit.proteins.batch_protein_processor:main"
 
 [tool.setuptools]
 package-data = {
@@ -61,11 +62,11 @@ package-data = {
 }
 
 [tool.setuptools.package-data]
-# Include assets for smiles reports (fonts, images) and antibodies utils (CSV database)
+# Include assets for smiles reports (fonts, images) and proteins utils (CSV database)
 "moremi_biokit" = [
     "assets/fonts/*.ttf", 
     "assets/images/*.png",
-    "antibodies/utils/*.csv", 
+    "proteins/utils/*.csv", 
 ]
 
 # Example of excluding files (if needed)

@@ -1,7 +1,7 @@
 """
 Antibody Ranking Report Generator
 
-This module generates comprehensive PDF reports for antibody rankings including validation metrics,
+This module generates comprehensive PDF reports for protein rankings including validation metrics,
 category scores, and data visualizations in a professional format.
 """
 
@@ -16,7 +16,7 @@ import numpy as np
 from math import ceil
 import importlib.resources as pkg_resources
 
-class AntibodyReportPDF(FPDF):
+class ProteinReportPDF(FPDF):
     def __init__(self):
         super().__init__('L')  # Landscape mode for wider tables
         self.set_auto_page_break(auto=True, margin=15)
@@ -218,14 +218,14 @@ def analyze_data(df):
     """Analyze data to generate key findings"""
     findings = []
     
-    findings.append(f"Number of antibodies analyzed: {len(df)}")
+    findings.append(f"Number of proteins analyzed: {len(df)}")
     
     if 'total_score' in df.columns:
         findings.append(f"Average overall score: {df['total_score'].mean():.3f}")
         findings.append(f"Score range: {df['total_score'].min():.3f} - {df['total_score'].max():.3f}")
     
     if len(df) > 0:
-        findings.append(f"Top performing antibody: {df.iloc[0]['antigen'][:50]}")
+        findings.append(f"Top performing protein: {df.iloc[0]['antigen'][:50]}")
     
     return findings
 
@@ -313,16 +313,16 @@ def create_visualizations(pdf, df, top_n=None):
     # Create a bar chart for weighted scores
     plt.figure(figsize=(12, 6))
     
-    # Get the top antibodies
-    top_antibodies = viz_df.head(min(5, len(viz_df)))
+    # Get the top proteins
+    top_proteins = viz_df.head(min(5, len(viz_df)))
     
     # Prepare data
     categories = [col.replace('Weighted_', '') for col in weighted_score_cols]
-    antibody_names = [f"Antibody {i+1}" for i in range(len(top_antibodies))]
+    protein_names = [f"Antibody {i+1}" for i in range(len(top_proteins))]
     
     # Create data matrix for bar chart
     data_matrix = []
-    for _, row in top_antibodies.iterrows():
+    for _, row in top_proteins.iterrows():
         data_matrix.append([row[col] for col in weighted_score_cols])
     
     # Transpose data for grouped bar chart
@@ -332,15 +332,15 @@ def create_visualizations(pdf, df, top_n=None):
     bar_width = 0.15
     x = np.arange(len(categories))
     
-    # Plot bars for each antibody
-    for i in range(len(top_antibodies)):
-        plt.bar(x + i*bar_width - (len(top_antibodies)*bar_width/2) + bar_width/2, 
-                data_matrix[:, i], width=bar_width, label=antibody_names[i])
+    # Plot bars for each protein
+    for i in range(len(top_proteins)):
+        plt.bar(x + i*bar_width - (len(top_proteins)*bar_width/2) + bar_width/2, 
+                data_matrix[:, i], width=bar_width, label=protein_names[i])
     
     # Customize plot
     plt.xlabel('Categories', fontsize=12)
     plt.ylabel('Weighted Score', fontsize=12)
-    plt.title('Weighted Scores by Category for Top Antibodies', fontsize=14)
+    plt.title('Weighted Scores by Category for Top proteins', fontsize=14)
     plt.xticks(x, categories, rotation=45, ha='right')
     plt.legend()
     plt.grid(True, axis='y', linestyle='--', alpha=0.3)
@@ -363,11 +363,11 @@ def create_visualizations(pdf, df, top_n=None):
         pdf.add_page()
         pdf.section_title('Top Antibody Score Profile')
         
-        top_antibody = viz_df.iloc[0]
+        top_protein = viz_df.iloc[0]
         
         # Prepare radar chart data
         categories = [col.replace('_Score', '') for col in raw_score_cols]
-        values = [top_antibody[col] for col in raw_score_cols]
+        values = [top_protein[col] for col in raw_score_cols]
         
         # Create radar chart
         fig = plt.figure(figsize=(8, 8))
@@ -410,7 +410,7 @@ def create_visualizations(pdf, df, top_n=None):
             os.remove(temp_plot)
 
 def generate_ranking_report(input_csv: str, output_pdf: str, top_n: int = None):
-    """Generate a comprehensive PDF report from the antibody ranking results CSV."""
+    """Generate a comprehensive PDF report from the protein ranking results CSV."""
     # Convert paths to Path objects
     input_csv = Path(input_csv)
     output_pdf = Path(output_pdf)
@@ -419,14 +419,14 @@ def generate_ranking_report(input_csv: str, output_pdf: str, top_n: int = None):
     df = pd.read_csv(input_csv)
     
     # Create PDF
-    pdf = AntibodyReportPDF()
+    pdf = ProteinReportPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
     # Executive Summary
     pdf.add_page()
     pdf.section_title('Executive Summary')
     pdf.set_font('SpaceGrotesk', '', 10)
-    pdf.multi_cell(0, 7, "This comprehensive report presents a detailed analysis of antibody rankings based on multiple evaluation criteria including binding affinity, immunogenicity, stability, and developability metrics. The rankings are based on both raw scores and weighted scores that reflect the relative importance of each category.")
+    pdf.multi_cell(0, 7, "This comprehensive report presents a detailed analysis of protein rankings based on multiple evaluation criteria including binding affinity, immunogenicity, stability, and developability metrics. The rankings are based on both raw scores and weighted scores that reflect the relative importance of each category.")
     pdf.ln(5)
 
     # Key Findings
@@ -549,7 +549,7 @@ def generate_ranking_report(input_csv: str, output_pdf: str, top_n: int = None):
 
 def generate_report(antigen: str, mol_formula: str, output_dir: Path, timestamp: str):
     """
-    Generate a PDF report for an antibody
+    Generate a PDF report for an protein
     """
     # Create output directory if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -569,7 +569,7 @@ def generate_basic_ranking_report(input_csv: str, output_pdf: str):
     df = pd.read_csv(input_csv)
     
     # Create PDF
-    pdf = AntibodyReportPDF()
+    pdf = ProteinReportPDF()
     
     # Add title page
     pdf.add_page()
@@ -608,6 +608,6 @@ def generate_basic_ranking_report(input_csv: str, output_pdf: str):
     pdf.output(str(output_pdf))
 
 if __name__ == "__main__":
-    input_csv = "antibody_rankings_20250318_100659.csv"
-    output_pdf = "enhanced_antibody_ranking_report.pdf"
+    input_csv = "protein_rankings_20250318_100659.csv"
+    output_pdf = "enhanced_protein_ranking_report.pdf"
     generate_ranking_report(input_csv, output_pdf, top_n=10) 

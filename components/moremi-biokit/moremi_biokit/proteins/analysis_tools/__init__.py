@@ -1,6 +1,6 @@
 """Antibody Analysis Tools Subpackage.
 
-This subpackage provides various tools for analyzing antibody sequences, including:
+This subpackage provides various tools for analyzing protein sequences, including:
 - Sequence homology searches (BLAST)
 - Physicochemical property calculation (ProtParam)
 - Stability prediction
@@ -9,7 +9,7 @@ This subpackage provides various tools for analyzing antibody sequences, includi
 - Structure prediction (via SWISS-MODEL)
 - B-cell epitope prediction (via IEDB)
 - Epitope conservancy analysis
-- Developability assessment based on sequence similarity to known antibodies.
+- Developability assessment based on sequence similarity to known proteins.
 """
 
 # Import primary functions and classes from submodules to make them easily accessible

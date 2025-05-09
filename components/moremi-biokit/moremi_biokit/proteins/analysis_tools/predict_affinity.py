@@ -3,11 +3,11 @@ import os
 from datetime import datetime
 import re
 
-def _combine_pdb_files(protein1_path, protein2_path, output_path):
+def _combine_pdb_files(receptor, ligand, output_path):
     """Combine two PDB files into one, with the second protein's chains renamed"""
     print(f"Combining PDB files into {output_path}")
     
-    with open(protein1_path, 'r') as f1, open(protein2_path, 'r') as f2, open(output_path, 'w') as out:
+    with open(receptor, 'r') as f1, open(ligand, 'r') as f2, open(output_path, 'w') as out:
         # Write first protein (chain A)
         for line in f1:
             if line.startswith(('ATOM', 'HETATM', 'TER')):
@@ -29,7 +29,7 @@ def _combine_pdb_files(protein1_path, protein2_path, output_path):
         out.write('END\n')
 
 
-def _save_results(sequence_num, affinity, prodigy_output, protein_path, antigen_path, error=None, output_dir="hepatitis_binding_results"):
+def save_results(sequence_num, affinity, prodigy_output, ligand_path, receptor_path, error=None, output_dir="hepatitis_binding_results"):
     """Save results to a text file with sequence number and timestamp"""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -42,8 +42,8 @@ def _save_results(sequence_num, affinity, prodigy_output, protein_path, antigen_
         f.write("=================================\n\n")
         f.write(f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Sequence Number: {sequence_num}\n")
-        f.write(f"Protein: {os.path.basename(protein_path)}\n")
-        f.write(f"Antigen: {os.path.basename(antigen_path)}\n\n")
+        f.write(f"Ligand(Protein): {os.path.basename(ligand_path)}\n")
+        f.write(f"Receptor(Antigen): {os.path.basename(receptor_path)}\n\n")
         
         if error:
             f.write(f"Error: {error}\n")
@@ -150,7 +150,7 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
     
     Args:
         receptor (str): Path to receptor PDB file(mostly antigen)
-        ligand (str): Path to ligand PDB file(mostly antibody)
+        ligand (str): Path to ligand PDB file(mostly protein)
         system_type (str): Operating system type ('windows_wsl', 'macos', 'linux', None)
                           If None, will auto-detect the system
     
@@ -302,7 +302,7 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
 def main():
     # Paths
     malaria_dir = "hepatitis_3d"
-    antigen_path = "antigen_hep/model_01_HCV_NS5B.pdb"
+    antigen_path = "components/moremi-biokit/moremi_biokit/proteins/pdb_targets/6mpv.pdb"
     
     # Get all PDB files
     pdb_files = [f for f in os.listdir(malaria_dir) if f.endswith('.pdb') and f.startswith('sequence_')]
@@ -347,7 +347,7 @@ def main():
         })
         
         # Save individual result
-        _save_results(seq_num, affinity, prodigy_output, protein_path, antigen_path, error)
+        save_results(seq_num, affinity, prodigy_output, protein_path, antigen_path, error)
         
         if affinity is not None:
             print(f"\nPredicted binding affinity: {affinity:.2f} kcal/mol")

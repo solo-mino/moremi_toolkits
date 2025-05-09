@@ -32,7 +32,7 @@ moremi_toolkits/
 │       │   │   ├── ranker.py
 │       │   │   └── property_calculators/
 │       │   │   └── reports/
-│       │   └── antibodies/          # Sub-package for Antibody tools
+│       │   └── proteins/          # Sub-package for Antibody tools
 │       │       ├── __init__.py
 │       │       └── ...
 │       ├── pyproject.toml           # Build config for moremi-biokit

@@ -1,4 +1,4 @@
-# smiles/antibodies requirements
+# smiles/proteins requirements
 - admet_ai
 - torch==2.5.1
 - biopython

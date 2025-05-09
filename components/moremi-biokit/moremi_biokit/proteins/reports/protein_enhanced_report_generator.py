@@ -1,7 +1,7 @@
 """
 Antibody Enhanced Report Generator
 
-This module generates comprehensive PDF and CSV reports for antibody analysis results,
+This module generates comprehensive PDF and CSV reports for protein analysis results,
 including detailed property breakdowns, visualizations, and structure information.
 """
 
@@ -17,7 +17,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 
-from .report_utils import get_asset_path, format_value, format_dict_for_table, create_protein_analysis_df
 
 # Define color scheme
 COLOR_SCHEME = {
@@ -33,7 +32,7 @@ COLOR_SCHEME = {
 }
 
 class EnhancedAntibodyReport(FPDF):
-    """Enhanced PDF report generator for antibody analysis."""
+    """Enhanced PDF report generator for protein analysis."""
     
     def __init__(self, output_dir: str):
         super().__init__('P', 'mm', 'A4')
@@ -167,7 +166,7 @@ class EnhancedAntibodyReport(FPDF):
 
 
     def add_basic_properties(self, data):
-        """Add basic antibody properties section"""
+        """Add basic protein properties section"""
         self.add_section_title("Basic Properties")
         
         basic_props = {
@@ -621,11 +620,11 @@ def generate_csv_report(data: Dict[str, Any], output_path: str):
     df = pd.DataFrame([flat_data])
     df.to_csv(output_path, index=False)
 
-def generate_enhanced_report(antibody_data: Dict[str, Any], output_dir: str, generate_pdf: bool = True, generate_csv: bool = True) -> Dict[str, Optional[Path]]:
-    """Generate enhanced PDF and CSV reports for antibody analysis.
+def generate_enhanced_report(protein_data: Dict[str, Any], output_dir: str, generate_pdf: bool = True, generate_csv: bool = True) -> Dict[str, Optional[Path]]:
+    """Generate enhanced PDF and CSV reports for protein analysis.
 
     Args:
-        antibody_data (Dict[str, Any]): Dictionary containing all antibody metrics and data.
+        protein_data (Dict[str, Any]): Dictionary containing all protein metrics and data.
         output_dir (str): The directory where reports will be saved.
         generate_pdf (bool, optional): Whether to generate a PDF report. Defaults to True.
         generate_csv (bool, optional): Whether to generate a CSV report. Defaults to True.
@@ -644,21 +643,21 @@ def generate_enhanced_report(antibody_data: Dict[str, Any], output_dir: str, gen
     # Generate timestamp for file names
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Get rank from antibody data, default to 0 if not provided
-    rank = antibody_data.get('rank', 0)
-    base_filename = f'r{rank}_{antibody_data.get("molecular_formula", "antibody")}_{timestamp}'
+    # Get rank from protein data, default to 0 if not provided
+    rank = protein_data.get('rank', 0)
+    base_filename = f'r{rank}_{protein_data.get("molecular_formula", "protein")}_{timestamp}'
 
     generated_paths: Dict[str, Optional[Path]] = {"pdf": None, "csv": None}
 
     if generate_pdf:
         pdf_path = output_dir_path / f'{base_filename}.pdf'
         try:
-            report_generator.generate_pdf_report(antibody_data, str(pdf_path))
+            report_generator.generate_pdf_report(protein_data, str(pdf_path))
             generated_paths["pdf"] = pdf_path
             logging.info(f"Successfully generated PDF report: {pdf_path}")
         except Exception as e:
             logging.error(f"Failed to generate PDF report for {base_filename}: {e}")
-            # Optionally, add to antibody_data['warnings'] if it's passed around
+            # Optionally, add to protein_data['warnings'] if it's passed around
     
     if generate_csv:
         csv_path = output_dir_path / f'{base_filename}.csv'
@@ -671,7 +670,7 @@ def generate_enhanced_report(antibody_data: Dict[str, Any], output_dir: str, gen
             # Placeholder for generate_csv_report logic, to be integrated correctly
             # based on where it's actually defined.
             # For this example, let's assume it's a static method or separate function.
-            _generate_csv_report_standalone(antibody_data, str(csv_path)) 
+            _generate_csv_report_standalone(protein_data, str(csv_path)) 
             generated_paths["csv"] = csv_path
             logging.info(f"Successfully generated CSV report: {csv_path}")
         except Exception as e:
@@ -681,37 +680,37 @@ def generate_enhanced_report(antibody_data: Dict[str, Any], output_dir: str, gen
 
 # Assuming generate_csv_report was a standalone function as in the original selection.
 # If it's meant to be a method of EnhancedAntibodyReport, this needs adjustment.
-def _generate_csv_report_standalone(antibody_data: Dict[str, Any], csv_path_str: str):
-    """Generates a CSV report from antibody data.
+def _generate_csv_report_standalone(protein_data: Dict[str, Any], csv_path_str: str):
+    """Generates a CSV report from protein data.
     This is a simplified placeholder based on the original structure.
     Args:
-        antibody_data: Dictionary of antibody data.
+        protein_data: Dictionary of protein data.
         csv_path_str: Path to save the CSV file.
     """
-    # Flatten relevant parts of antibody_data for CSV
+    # Flatten relevant parts of protein_data for CSV
     # This is a very basic flattening, might need to be more sophisticated
     flat_data = {}
-    flat_data['sequence'] = antibody_data.get('sequence')
-    flat_data['antigen'] = antibody_data.get('antigen')
-    flat_data['molecular_formula'] = antibody_data.get('molecular_formula')
-    flat_data['molecular_weight'] = antibody_data.get('molecular_weight')
-    flat_data['rank'] = antibody_data.get('rank')
-    flat_data['total_score'] = antibody_data.get('total_score')
+    flat_data['sequence'] = protein_data.get('sequence')
+    flat_data['antigen'] = protein_data.get('antigen')
+    flat_data['molecular_formula'] = protein_data.get('molecular_formula')
+    flat_data['molecular_weight'] = protein_data.get('molecular_weight')
+    flat_data['rank'] = protein_data.get('rank')
+    flat_data['total_score'] = protein_data.get('total_score')
 
-    for category, cat_data in antibody_data.get('category_scores', {}).get('raw', {}).items():
+    for category, cat_data in protein_data.get('category_scores', {}).get('raw', {}).items():
         flat_data[f'raw_score_{category}'] = cat_data
-    for category, cat_data in antibody_data.get('category_scores', {}).get('weighted', {}).items():
+    for category, cat_data in protein_data.get('category_scores', {}).get('weighted', {}).items():
          flat_data[f'weighted_score_{category}'] = cat_data
 
     # Extract specific metrics - this needs careful selection of what to include
     # For example, from protparam:
-    if 'protparam' in antibody_data and isinstance(antibody_data['protparam'], dict):
-        flat_data['gravy'] = antibody_data['protparam'].get('gravy')
-        flat_data['predicted_solubility'] = antibody_data['protparam'].get('predicted_solubility')
+    if 'protparam' in protein_data and isinstance(protein_data['protparam'], dict):
+        flat_data['gravy'] = protein_data['protparam'].get('gravy')
+        flat_data['predicted_solubility'] = protein_data['protparam'].get('predicted_solubility')
     
     # Add more fields as needed from other sections like 'stability', 'aggregation' etc.
-    if 'stability' in antibody_data and isinstance(antibody_data['stability'], dict):
-        flat_data['melting_temperature'] = antibody_data['stability'].get('melting_temperature')
+    if 'stability' in protein_data and isinstance(protein_data['stability'], dict):
+        flat_data['melting_temperature'] = protein_data['stability'].get('melting_temperature')
 
     df = pd.DataFrame([flat_data])
     df.to_csv(csv_path_str, index=False)
