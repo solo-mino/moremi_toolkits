@@ -307,11 +307,13 @@ def fetch_pdb(
 
     Args:
         target (Union[str, List[str]]): The main input. Its meaning depends on `input_type`.
-            - If `input_type` is 'identifier': A PDB ID (e.g., "1xyz") or other database ID.
-            - If `input_type` is 'sequence': An amino acid sequence string.
-            - If `input_type` is 'sequence_list': A list of amino acid sequence strings (only the first is used for prediction).
-            - If `input_type` is 'sequence_file': Path to a file containing sequence(s) (FASTA or plain, first sequence used).
-            - If `input_type` is 'local_pdb_file': Path to an existing PDB file on the local system.
+        
+                - If `input_type` is 'identifier': A PDB ID (e.g., "1xyz") or other database ID.
+                - If `input_type` is 'sequence': An amino acid sequence string.
+                - If `input_type` is 'sequence_list': A list of amino acid sequence strings (only the first is used for prediction).
+                - If `input_type` is 'sequence_file': Path to a file containing sequence(s) (FASTA or plain, first sequence used).
+                - If `input_type` is 'local_pdb_file': Path to an existing PDB file on the local system.
+            
         input_type (str, optional): Specifies how to interpret `target`.
             Choices: 'identifier', 'sequence', 'sequence_list', 'sequence_file', 'local_pdb_file'. 
             Defaults to 'identifier'.
