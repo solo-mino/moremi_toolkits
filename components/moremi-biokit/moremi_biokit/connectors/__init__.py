@@ -23,7 +23,11 @@ Example Usage (conceptual, depends on functions exposed here):
 """
 
 from .rcsb import (
-    download_pdb_from_rcsb
+    download_pdb_from_rcsb,
+    fetch_pdb_verification_summary,
+    search_rcsb_by_sequence,
+    search_rcsb_by_text
+   
 )
 from .uniprot import(
     download_pdb_from_uniprot
@@ -34,6 +38,11 @@ from .ncbi import(
 
 __all__ = [
     "download_pdb_from_rcsb",
+    "fetch_pdb_verification_summary",
+    "search_rcsb_by_sequence",
+    "search_rcsb_by_text",
+    
     "download_pdb_from_ncbi",
+    
     "download_pdb_from_uniprot",
 ]
