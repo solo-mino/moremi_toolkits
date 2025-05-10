@@ -38,8 +38,8 @@ dependencies = [
     "tqdm",
     "fpdf",
     "py3Dmol",
-    "openbabel",
 ]
+# "openbabel",
 
 [project.optional-dependencies]
 dev = [
