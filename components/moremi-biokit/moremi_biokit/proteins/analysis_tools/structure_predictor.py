@@ -177,7 +177,8 @@ def predict_structure(
                 # Add other relevant fields from model_info as needed
             },
             "pdb_file_path": pdb_file_path,
-            "pdb_content": pdb_content # Be cautious with large PDB files in memory
+            # TODO: DELETE FOR NOW BECAUSE OG LARGE PDB
+            # "pdb_content": pdb_content # Be cautious with large PDB files in memory
         }
 
     except requests.exceptions.HTTPError as http_err:

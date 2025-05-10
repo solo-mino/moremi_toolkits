@@ -116,7 +116,7 @@ def get_epitope_sequences_from_prediction(
 def predict_bcell_epitopes(
     sequence: str,
     method: str = IEDB_DEFAULT_METHOD,
-    window_size: Optional[int] = None, # Default window size handled by IEDB for most methods
+    window_size: Optional[int] = 9,
 ) -> Dict[str, Any]:
     """Predict B-cell epitopes in a protein sequence using IEDB analysis tools.
 
@@ -157,11 +157,14 @@ def predict_bcell_epitopes(
     try:
         # query_bcell_epitope can take sequence, method, and window_size
         # It typically returns a pandas DataFrame
-        call_args = {"method": method, "sequence": cleaned_sequence}
-        if window_size is not None: # Only pass window_size if specified
-            call_args["window_size"] = window_size
         
-        raw_iedb_df = iedb.query_bcell_epitope(**call_args) # type: ignore
+        # TODO: DELETE THIS SECTIONS AFTER SOME REVIEWS
+        # call_args = {"method": method, "sequence": cleaned_sequence}
+        # if window_size is not None: # Only pass window_size if specified
+        #     call_args["window_size"] = window_size
+        # raw_iedb_df = iedb.query_bcell_epitope(**call_args) # type: ignore
+        
+        raw_iedb_df = iedb.query_bcell_epitope(method=method, sequence=sequence, window_size=window_size)
 
         if not isinstance(raw_iedb_df, pd.DataFrame) or raw_iedb_df.empty:
             # Some methods might return empty if no epitopes or on error, 
