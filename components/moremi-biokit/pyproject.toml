@@ -22,18 +22,21 @@ authors = [
 
 dependencies = [
     "admet_ai",
+    "requests",
+    "pandas",
+    "rdkit",
+    "reportlab",
+    "svglib",
     "torch==2.5.1",
     "biopython",
+    "pyfaidx",
     "iedb",
-    "pandas",
     "numpy",
     "matplotlib",
     "scikit-learn",
     "seaborn",
     "tqdm",
     "fpdf",
-    "requests",
-    "rdkit",
     "py3Dmol",
     "openbabel",
 ]
@@ -57,11 +60,6 @@ predict-structure = "moremi_biokit.proteins.analysis_tools.structure_predictor:m
 fetch-pdb = "moremi_biokit.proteins.utils.pdb_fetcher:main"
 process-protein-batch = "moremi_biokit.proteins.batch_protein_processor:main"
 
-[tool.setuptools]
-package-data = {
-    "moremi_biokit.assets" = ["fonts/*", "minologo.png"],
-}
-
 [tool.setuptools.package-data]
 # Include assets for smiles reports (fonts, images) and proteins utils (CSV database)
 "moremi_biokit" = [
@@ -70,6 +68,7 @@ package-data = {
     "proteins/utils/*.csv",
     "test_pdb_targets/proteins/*.pdb", 
     "test_pdb_targets/smiles/*.pdb", 
+    "connectors/*.txt",
 ]
 
 # Example of excluding files (if needed)

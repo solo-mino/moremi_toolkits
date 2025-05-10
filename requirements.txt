@@ -13,3 +13,4 @@ requests
 rdkit
 py3Dmol
 openbabel
+pyfaidx
