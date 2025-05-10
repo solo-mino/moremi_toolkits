@@ -26,7 +26,10 @@ from .rcsb import (
     download_pdb_from_rcsb,
     fetch_pdb_verification_summary,
     search_rcsb_by_sequence,
-    search_rcsb_by_text
+    search_rcsb_by_text,
+    get_all_pdb_sequences_details,
+    get_pdb_chain_sequence_details,
+    
    
 )
 from .uniprot import(
@@ -41,6 +44,8 @@ __all__ = [
     "fetch_pdb_verification_summary",
     "search_rcsb_by_sequence",
     "search_rcsb_by_text",
+    "get_all_pdb_sequences_details",
+    "get_pdb_chain_sequence_details",
     
     "download_pdb_from_ncbi",
     

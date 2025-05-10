@@ -26,7 +26,16 @@ logging.basicConfig(
 )
 
 class BatchProteinProcessor:
-    def __init__(self, input_file: str, output_dir: Optional[str] = None, generate_pdf: bool = True, generate_csv: bool = True):
+    def __init__(self, input_file: str, 
+                 output_dir: Optional[str] = None, 
+                 generate_pdf: bool = True, 
+                 generate_csv: bool = True,
+                 target_antigen_sequence: Optional[str] = None,
+                 target_antigen_pdb_file_path: Optional[str] = None,
+                 target_antigen_pdb_chain_id: Optional[str] = None,
+                 target_antigen_pdb_id_input: Optional[str] = None,
+                 antigen_pdb_download_path: Optional[str] = None
+                 ):
         """Initialize the batch processor.
         
         Args:
@@ -34,12 +43,25 @@ class BatchProteinProcessor:
             output_dir: Directory to save outputs (default: creates timestamped dir)
             generate_pdf (bool): Whether to generate PDF reports.
             generate_csv (bool): Whether to generate CSV reports.
+            target_antigen_sequence (Optional[str]): Directly provided antigen amino acid sequence.
+            target_antigen_pdb_file_path (Optional[str]): Path to a local PDB file for the antigen.
+            target_antigen_pdb_chain_id (Optional[str]): Antigen identifier as 'PDBID_CHAIN' (e.g., "1XYZ_A").
+            target_antigen_pdb_id_input (Optional[str]): PDB ID of the target antigen for PDB file fetching.
+            antigen_pdb_download_path (Optional[str]): Directory to store downloaded antigen PDBs.
+                                                       If None, a subdir in output_dir will be used.
         """
         self.input_file = Path(input_file)
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.generate_pdf = generate_pdf
         self.generate_csv = generate_csv
         
+        # Store antigen parameters
+        self.target_antigen_sequence = target_antigen_sequence
+        self.target_antigen_pdb_file_path = target_antigen_pdb_file_path
+        self.target_antigen_pdb_chain_id = target_antigen_pdb_chain_id
+        self.target_antigen_pdb_id_input = target_antigen_pdb_id_input
+        # self.antigen_pdb_download_path = antigen_pdb_download_path # Store if needed for other purposes, or pass directly
+
         # Set up output directory
         if output_dir:
             self.output_dir = Path(output_dir)
@@ -47,8 +69,25 @@ class BatchProteinProcessor:
             self.output_dir = Path("protein_analysis_results") / self.timestamp
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Initialize components
-        self.validator = ProteinValidator(pdb_files_path=f"./{self.output_dir}/pdbs")
+        # Initialize components, passing antigen parameters to ProteinValidator
+        validator_pdb_path = self.output_dir / "pdbs" # Define explicitly for clarity
+        validator_pdb_path.mkdir(parents=True, exist_ok=True)
+
+        # Determine path for downloaded antigen PDBs
+        if antigen_pdb_download_path:
+            self.actual_antigen_pdb_download_path = Path(antigen_pdb_download_path)
+        else:
+            self.actual_antigen_pdb_download_path = self.output_dir / "downloaded_antigen_pdbs"
+        self.actual_antigen_pdb_download_path.mkdir(parents=True, exist_ok=True)
+
+        self.validator = ProteinValidator(
+            pdb_files_path=str(validator_pdb_path), # For generated PDBs by predict_structure
+            target_antigen_sequence=self.target_antigen_sequence,
+            target_antigen_pdb_file_path=self.target_antigen_pdb_file_path,
+            target_antigen_pdb_chain_id=self.target_antigen_pdb_chain_id,
+            target_antigen_pdb_id_input=self.target_antigen_pdb_id_input,
+            antigen_pdb_download_path=str(self.actual_antigen_pdb_download_path) # For downloaded antigen PDBs
+        )
         self.ranker = ProteinRanker(generate_pdf=self.generate_pdf, generate_csv=self.generate_csv)
         self.ranker.set_output_directory(str(self.output_dir))
         
@@ -222,13 +261,25 @@ def main():
     parser.add_argument("--pdf", action=argparse.BooleanOptionalAction, default=True, help="Generate PDF reports (--no-pdf to disable).")
     parser.add_argument("--csv", action=argparse.BooleanOptionalAction, default=True, help="Generate CSV reports (--no-csv to disable).")
     
+    # Add CLI arguments for antigen parameters
+    parser.add_argument("--target-antigen-sequence", type=str, default=None, help="Directly provided antigen amino acid sequence.")
+    parser.add_argument("--target-antigen-pdb-file-path", type=str, default=None, help="Path to a local PDB file for the antigen.")
+    parser.add_argument("--target-antigen-pdb-chain-id", type=str, default=None, help="Antigen identifier as 'PDBID_CHAIN' (e.g., \"1XYZ_A\").")
+    parser.add_argument("--target-antigen-pdb-id-input", type=str, default=None, help="PDB ID of the target antigen for PDB file fetching.")
+    parser.add_argument("--antigen-pdb-download-path", type=str, default=None, help="Specific directory to store downloaded antigen PDBs. If not set, a subdirectory 'downloaded_antigen_pdbs' within the main output directory will be used.")
+
     args = parser.parse_args()
     
     processor = BatchProteinProcessor(
         args.input_file, 
         args.output_dir,
         generate_pdf=args.pdf,
-        generate_csv=args.csv
+        generate_csv=args.csv,
+        target_antigen_sequence=args.target_antigen_sequence,
+        target_antigen_pdb_file_path=args.target_antigen_pdb_file_path,
+        target_antigen_pdb_chain_id=args.target_antigen_pdb_chain_id,
+        target_antigen_pdb_id_input=args.target_antigen_pdb_id_input,
+        antigen_pdb_download_path=args.antigen_pdb_download_path
     )
     processor.process_batch()
 
