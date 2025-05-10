@@ -34,7 +34,8 @@ dependencies = [
     "fpdf",
     "requests",
     "rdkit",
-    "py3Dmol"
+    "py3Dmol",
+    "openbabel",
 ]
 
 [project.optional-dependencies]
