@@ -5,6 +5,7 @@
 
 # linux pkl files
 *.pkl
+rcsb_pdb_sequence_db.txt
 
 protein_notebook_outputs/
 
