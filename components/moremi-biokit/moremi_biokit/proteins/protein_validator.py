@@ -13,7 +13,7 @@ from enum import Enum
 import os
 import logging
 from datetime import datetime
-import pdb_fetcher
+from moremi_biokit import pdb_fetcher
 import random
 
 from Bio.SeqUtils.ProtParam import ProteinAnalysis

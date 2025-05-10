@@ -25,7 +25,7 @@ logging.basicConfig(
     ]
 )
 
-class BatchAntibodyProcessor:
+class BatchProteinProcessor:
     def __init__(self, input_file: str, output_dir: Optional[str] = None, generate_pdf: bool = True, generate_csv: bool = True):
         """Initialize the batch processor.
         
@@ -224,7 +224,7 @@ def main():
     
     args = parser.parse_args()
     
-    processor = BatchAntibodyProcessor(
+    processor = BatchProteinProcessor(
         args.input_file, 
         args.output_dir,
         generate_pdf=args.pdf,

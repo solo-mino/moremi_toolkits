@@ -6,6 +6,8 @@
 # linux pkl files
 *.pkl
 
+protein_notebook_outputs/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

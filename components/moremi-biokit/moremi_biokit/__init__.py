@@ -49,7 +49,7 @@ from .smiles import (
 )
 
 from .proteins import (
-    BatchAntibodyProcessor,
+    BatchProteinProcessor,
     ProteinValidator,
     ProteinRanker,
     MetricCategory,
@@ -73,7 +73,7 @@ __all__ = [
     "MetricCategory",
     "ScoringConfig",
     
-    "BatchAntibodyProcessor",
+    "BatchProteinProcessor",
     "ProteinValidator",
     "ProteinRanker",
     "MetricCategory",
