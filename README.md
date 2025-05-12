@@ -8,6 +8,7 @@
 Welcome to the `moremi_toolkits` monorepo! This repository serves as the central location for foundational Python packages used within the Moremi ecosystem, primarily supporting the **Moremi Bio Autonomous Agent**.
 
 The primary package housed here is **`moremi-biokit`**, a comprehensive toolkit for processing and analyzing biological entities, currently including:
+
 - 🧪 Small molecule analysis (via SMILES)
 - 🔬 Antibody analysis
 
@@ -94,18 +95,23 @@ moremi_toolkits/
 If you need to clone or install from this private repository, you'll need to authenticate with GitHub, typically using SSH keys.
 
 1. **Check for existing SSH keys:**
+
    ```bash
    ls -al ~/.ssh
    ```
+
    Look for files like `id_rsa.pub` or `id_ed25519.pub`. If they exist, you might already have a key.
 
 2. **Generate a new SSH key if you don't have one:**
+
    ```bash
    ssh-keygen -t ed25519 -C "your_email@example.com"
    ```
+
    Follow the prompts. It's generally fine to accept the default file location and skip setting a passphrase for local development convenience, or add one for more security.
 
 3. **Add your SSH private key to the ssh-agent:**
+
    ```bash
    eval "$(ssh-agent -s)"
    ssh-add ~/.ssh/id_ed25519  # Or id_rsa if you generated an RSA key
@@ -113,15 +119,19 @@ If you need to clone or install from this private repository, you'll need to aut
 
 4. **Add your SSH public key to your GitHub account:**
    Copy the contents of your public key file:
+
    ```bash
    cat ~/.ssh/id_ed25519.pub  # Or id_rsa.pub
    ```
+
    Go to your GitHub account settings -> SSH and GPG keys -> New SSH key. Paste your key there and save it.
 
 5. **Test your SSH connection:**
+
    ```bash
    ssh -T git@github.com
    ```
+
    You should see a message like: "Hi username! You've successfully authenticated, but GitHub does not provide shell access."
 
 ## 5. Installation & Development 💻
@@ -129,6 +139,7 @@ If you need to clone or install from this private repository, you'll need to aut
 ### 5.1. For Developers of `moremi-biokit`
 
 1. **Clone the repository (using SSH):**
+
    ```bash
    git clone git@github.com:solo-mino/moremi_toolkits.git
    cd moremi_toolkits
@@ -136,26 +147,31 @@ If you need to clone or install from this private repository, you'll need to aut
 
 2. **Create and activate a Conda environment:**
    It's recommended to install `openbabel` and `rdkit` (if used by your project, it's listed in `dependencies`) via Conda first.
+
    ```bash
    conda create -n moremi_env python=3.10  # Or your desired Python version (e.g., 3.8, 3.9)
    conda activate moremi_env
    conda install -c conda-forge openbabel rdkit --yes # Add other Conda-specific deps here if any
    ```
+
    *Note: Check the `moremi-biokit/pyproject.toml` for the specific Python version required.*
 
 3. **Install `moremi-biokit` in editable mode:**
    This allows you to make changes to the code and have them immediately available.
+
    ```bash
    pip install -e ./moremi-biokit/
    ```
 
 4. **Install development dependencies:**
    (Assuming these are defined in `moremi-biokit/pyproject.toml` under `[project.optional-dependencies]`)
+
    ```bash
    pip install -e "./moremi-biokit/[dev]"
    ```
 
 5. **Run tests:**
+
    ```bash
    pytest ./moremi-biokit/tests/
    ```
@@ -164,6 +180,7 @@ If you need to clone or install from this private repository, you'll need to aut
 
 1. **Set up a Conda environment with necessary dependencies:**
    It is **highly recommended** to install `openbabel` and `rdkit` via Conda into the target environment *before* installing `moremi-biokit`.
+
    ```bash
    conda create -n my_agent_env python=3.10 # Or your desired Python version
    conda activate my_agent_env
@@ -173,21 +190,25 @@ If you need to clone or install from this private repository, you'll need to aut
 2. **Pip install:**
 
    - **From a specific branch (e.g., `main`, using SSH URL for private repo):**
-     ```
-     pip install git+ssh://git@github.com/solo-mino/moremi_toolkits.git@main#subdirectory=moremi-biokit
-     ```
+
+    ```bash
+    pip install git+ssh://git@github.com/solo-mino/moremi_toolkits.git@main#subdirectory=moremi-biokit
+    ```
 
 3. **Install dependencies in the consuming project (after activating the Conda environment):**
+
    ```bash
    pip install -r requirements.txt
    ```
+
    Pip should now find `openbabel` and `rdkit` already installed via Conda and will proceed to install `moremi-biokit` and its other pure Python dependencies.
 
-   **NB:** This step is _optional_ as the package in the `step 2` will install all the needed dependencies.
+   **NB:** This step is *optional* as the package in the `step 2` will install all the needed dependencies.
 
 ## 6. Contribution Guidelines 🤝
 
 (Detail your internal contribution process here)
+
 - Branching strategy (e.g., `feature/`, `bugfix/`, `chore/`)
 - Commit message conventions
 - Code review process

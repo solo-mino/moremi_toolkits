@@ -799,7 +799,7 @@ def fetch_pdb_sequence(pdb_id: str) -> Optional[Dict[str, str]]:
         print(f"An unexpected error occurred while fetching/parsing FASTA for {pdb_id}: {e}\n{traceback.format_exc()}")
         return None
 
-
+# TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
 def get_pdb_chain_sequence_details(pdb_id: str, chain_id: str) -> Optional[Dict[str, Any]]:
     """Fetches sequence and details for a specific PDB ID and chain ID.
 
@@ -886,7 +886,7 @@ def get_pdb_chain_sequence_details(pdb_id: str, chain_id: str) -> Optional[Dict[
         print(f"Target sequence {target_query_id} not found in the downloaded online FASTA for PDB ID {pdb_id}.")
         return None
 
-
+# TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
 def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
     """Fetches all sequence details for a given PDB ID.
 

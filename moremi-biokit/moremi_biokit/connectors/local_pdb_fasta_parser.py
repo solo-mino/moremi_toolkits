@@ -12,6 +12,8 @@ The main functionalities are:
 The module expects 'rcsb_pdb_sequence_db.txt' to be available as a package resource
 within the 'moremi_biokit.connectors' path.
 """
+
+# TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
 import importlib.resources
 from pyfaidx import Fasta, FastaNotFoundError, FastaIndexingError
 from typing import Optional, Dict, Any, List
