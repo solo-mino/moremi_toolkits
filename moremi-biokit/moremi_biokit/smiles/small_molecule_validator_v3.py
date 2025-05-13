@@ -11,6 +11,7 @@ from typing import List, Dict, Optional, Union
 import pandas as pd
 from enum import Enum
 import os
+import logging
 
 from rdkit import Chem
 from rdkit.Chem import Descriptors
@@ -23,6 +24,10 @@ from .property_calculators import (
     DruglikenessProperties,
     MedicinalChemistryProperties
 )
+
+# Initialize logger for this module
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class MetricCategory(Enum):
     """Categories of metrics based on the comprehensive breakdown"""
@@ -495,6 +500,103 @@ class SmallMoleculeValidator:
         
         return valid_metrics
     
+    def get_metrics_as_dict_list(self, results: List[ProcessingResult]) -> List[Dict]:
+        """Converts a list of successful ProcessingResult objects to a list of dictionaries.
+
+        Each dictionary in the list represents the metrics of a successfully processed molecule,
+        with nested metric categories flattened for easier conversion to tabular formats.
+
+        Args:
+            results (List[ProcessingResult]): A list of ProcessingResult objects,
+                typically obtained from `process_molecule` or `process_molecules`.
+
+        Returns:
+            List[Dict]: A list of dictionaries, where each dictionary contains
+                the flattened metrics for a molecule. Returns an empty list if
+                no molecules were processed successfully or if the input list is empty.
+        """
+        metrics_list = []
+        for result in results:
+            if result.success and result.metrics:
+                metric_dict = result.metrics.to_dict()
+                
+                # Flatten the 'metrics' dictionary
+                flat_dict = {
+                    'smiles': metric_dict.get('smiles'),
+                    'molecular_formula': metric_dict.get('molecular_formula'),
+                    'molecular_weight': metric_dict.get('molecular_weight'),
+                }
+                
+                # Add all individual metrics from nested dictionaries
+                for category, category_metrics in metric_dict.get('metrics', {}).items():
+                    if isinstance(category_metrics, dict):
+                        for key, value in category_metrics.items():
+                            flat_dict[f'{category}_{key}'] = value
+                    else:
+                        # Handle cases where a category might not be a dict (though unlikely based on current structure)
+                        flat_dict[category] = category_metrics 
+                
+                flat_dict['warnings'] = ', '.join(metric_dict.get('warnings', [])) # Join warnings into a string
+                
+                metrics_list.append(flat_dict)
+            elif not result.success:
+                logger.warning(f"Skipping failed molecule: {result.smiles} - Error: {result.error}")
+        return metrics_list
+
+    def save_metrics_to_csv(self, results: List[ProcessingResult], output_dir: str, filename: str = "molecule_metrics.csv") -> Optional[str]:
+        """Saves the metrics of successfully processed molecules to a CSV file.
+
+        The method first converts the processing results to a list of dictionaries
+        using `get_metrics_as_dict_list`, then creates a Pandas DataFrame,
+        and finally saves it to the specified CSV file.
+
+        Args:
+            results (List[ProcessingResult]): A list of ProcessingResult objects.
+            output_dir (str): The directory where the CSV file will be saved.
+                The directory will be created if it doesn't exist.
+            filename (str, optional): The name of the CSV file.
+                Defaults to "molecule_metrics.csv".
+
+        Returns:
+            Optional[str]: The full path to the saved CSV file if successful,
+                otherwise None.
+        
+        Raises:
+            IOError: If there's an issue writing the file.
+            Exception: For other potential errors during DataFrame creation or saving.
+        """
+        if not results:
+            logger.warning("No results provided to save_metrics_to_csv. Skipping file generation.")
+            return None
+
+        metrics_dict_list = self.get_metrics_as_dict_list(results)
+
+        if not metrics_dict_list:
+            logger.info("No successful metrics to save to CSV.")
+            return None
+
+        try:
+            df = pd.DataFrame(metrics_dict_list)
+            
+            # Ensure output directory exists
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                logger.info(f"Created output directory: {output_dir}")
+
+            output_path = os.path.join(output_dir, filename)
+            
+            df.to_csv(output_path, index=False)
+            logger.info(f"Successfully saved molecule metrics to {output_path}")
+            return output_path
+
+        except IOError as e:
+            logger.error(f"IOError saving metrics to CSV: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while saving metrics to CSV: {e}")
+            raise
+        return None # Should not be reached if exceptions are raised
+
 if __name__ == "__main__":
     # Example usage
     validator = SmallMoleculeValidator()
