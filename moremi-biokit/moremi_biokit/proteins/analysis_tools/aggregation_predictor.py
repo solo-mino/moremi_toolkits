@@ -44,13 +44,13 @@ def predict_aggregation(
 
     Returns:
         Dict[str, Any]: A dictionary containing aggregation prediction results:
-            - "aggregation_result" (Dict[str, Any]):
-                - "overall_aggregation_propensity" (str): "Low", "Moderate", or "High".
-                - "aggregation_prone_regions" (List[Dict[str, Any]]): A list of 
+        - "aggregation_result" (Dict[str, Any]):
+            - "overall_aggregation_propensity" (str): "Low", "Moderate", or "High".
+            - "aggregation_prone_regions" (List[Dict[str, Any]]): A list of 
                   identified APRs, each with "region_coordinates" (Tuple[int, int]) 
                   and "sequence_fragment" (str).
-                - "average_aggregation_score" (float): The average score over all windows.
-            - "identified_regions_count" (int): The number of merged APRs.
+            - "average_aggregation_score" (float): The average score over all windows.
+        - "identified_regions_count" (int): The number of merged APRs.
             Returns an {"error": "message"} dictionary for invalid input.
     """
     if not isinstance(sequence, str) or not sequence.strip():

@@ -7,7 +7,7 @@ import re
 import os
 import time
 
-class AntibodyComparisonTool:
+class ProteinComparisonTool:
     def __init__(self, csv_path: str = None):
         """Initialize the tool with a path to the SAbDab CSV file."""
         if csv_path is None:
@@ -34,6 +34,12 @@ class AntibodyComparisonTool:
         
         # Preprocess database for faster searching
         self._preprocess_database()
+        
+        # Initialize performance statistics dictionary
+        self._stats = {
+            'total_database_entries': len(self.sabdab_df) if hasattr(self, 'sabdab_df') else 0,
+            'candidates_after_length_filter': 0,
+        }
         
     def _preprocess_database(self):
         """Preprocess database to speed up searching."""
@@ -189,6 +195,8 @@ class AntibodyComparisonTool:
     def search_sabdab_local(self, query_sequence: str, similarity: float = 0.7, quick_mode: bool = True) -> pd.DataFrame:
         """Search the local SabDab DataFrame using optimized multi-stage filtering."""
         if not query_sequence or similarity <= 0:
+            # Reset stats for clarity if search is invalid
+            self._stats['candidates_after_length_filter'] = 0
             return pd.DataFrame()
             
         results = []
@@ -202,6 +210,10 @@ class AntibodyComparisonTool:
         heavy_length_mask = self.heavy_lengths.apply(lambda x: self._length_filter(query_length, x, thresholds['length']))
         light_length_mask = self.light_lengths.apply(lambda x: self._length_filter(query_length, x, thresholds['length']))
         candidates_mask = heavy_length_mask | light_length_mask
+        
+        # Update statistics
+        candidates_after_length_filter = candidates_mask.sum()
+        self._stats['candidates_after_length_filter'] = candidates_after_length_filter
         
         if not candidates_mask.any():
             return pd.DataFrame()
@@ -237,6 +249,29 @@ class AntibodyComparisonTool:
         final_columns = [col for col in columns_to_keep if col in results_df.columns]
         return results_df[final_columns]
 
+    def get_performance_stats(self, query_sequence_length: int, final_matches_count: int) -> Dict[str, int]:
+        """
+        Returns performance statistics from the most recent search.
+
+        Args:
+            query_sequence_length (int): The length of the sequence used in the search.
+            final_matches_count (int): The number of matches returned by the search.
+
+        Returns:
+            Dict[str, int]: A dictionary containing performance metrics like total
+                database entries, candidates after filtering stages, query length, 
+                and final matches found.
+        """
+        stats = self._stats.copy()  # Start with stats captured during search
+        stats['query_sequence_length'] = query_sequence_length
+        stats['final_matches_found'] = final_matches_count
+        
+        # Ensure default values are present if search didn't run or failed early
+        stats.setdefault('total_database_entries', len(self.sabdab_df) if hasattr(self, 'sabdab_df') else 0)
+        stats.setdefault('candidates_after_length_filter', 0)
+            
+        return stats
+
 def predict_developability(
     sequence: str,
     similarity_threshold: float = 0.7,
@@ -246,7 +281,7 @@ def predict_developability(
 ) -> Dict[str, Any]:
     """Predict the developability of an protein sequence by comparing it with known proteins.
 
-    This function utilizes the AntibodyComparisonTool to search a local SAbDab-derived 
+    This function utilizes the ProteinComparisonTool to search a local SAbDab-derived 
     database for similar protein sequences and provides a developability score based on 
     the status and clinical trial phase of matched proteins.
 
@@ -261,7 +296,7 @@ def predict_developability(
         quick_mode (bool, optional): If True, uses a faster alignment algorithm. 
             If False, uses a more sensitive (BLOSUM62) alignment. Defaults to True.
         sabdab_csv_path (Optional[str], optional): Path to the SAbDab CSV file. 
-            If None, the AntibodyComparisonTool will use its default path. 
+            If None, the ProteinComparisonTool will use its default path. 
             Defaults to None.
 
     Returns:
@@ -284,10 +319,10 @@ def predict_developability(
 
     # Initialize tool
     try:
-        tool = AntibodyComparisonTool(csv_path=sabdab_csv_path)
+        tool = ProteinComparisonTool(csv_path=sabdab_csv_path)
     except Exception as e:
         return {
-            "error": f"Failed to initialize AntibodyComparisonTool: {e}",
+            "error": f"Failed to initialize ProteinComparisonTool: {e}",
             "matched_proteins_df": pd.DataFrame(),
             "search_summary": {},
             "developability_score": 0.0,

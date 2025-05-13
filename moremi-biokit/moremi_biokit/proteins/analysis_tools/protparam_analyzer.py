@@ -17,18 +17,18 @@ def analyze_with_protparam(sequence: str) -> Dict[str, Union[Dict[str, Any], str
             results of the analysis under the key "protein_params". 
             If an error occurs, returns a dictionary with an "error" key 
             and the error message.
-            The "protein_params" dictionary includes:
-            - molecular_weight (str): Formatted molecular weight.
-            - aromaticity (str): Formatted aromaticity value.
-            - instability_index (Tuple[str, str]): Formatted instability index 
-              and stability classification (e.g., ("10.0000", "stable")).
-            - isoelectric_point (str): Formatted isoelectric point (pI).
-            - gravy (str): Formatted GRAVY (Grand Average of Hydropathy) score.
-            - hydrophobic_amino_acids (str): Percentage of hydrophobic amino acids.
-            - hydrophilic_amino_acids (str): Percentage of hydrophilic amino acids.
-            - predicted_solubility (str): "Soluble" or "Insoluble".
-            - secondary_structure_fraction (Tuple[float, float, float]): Fraction 
-              of helix, turn, and sheet.
+        The "protein_params" dictionary includes:
+        - molecular_weight (str): Formatted molecular weight.
+        - aromaticity (str): Formatted aromaticity value.
+        - instability_index (Tuple[str, str]): Formatted instability index 
+            and stability classification (e.g., ("10.0000", "stable")).
+        - isoelectric_point (str): Formatted isoelectric point (pI).
+        - gravy (str): Formatted GRAVY (Grand Average of Hydropathy) score.
+        - hydrophobic_amino_acids (str): Percentage of hydrophobic amino acids.
+        - hydrophilic_amino_acids (str): Percentage of hydrophilic amino acids.
+        - predicted_solubility (str): "Soluble" or "Insoluble".
+        - secondary_structure_fraction (Tuple[float, float, float]): Fraction 
+            of helix, turn, and sheet.
     """
     try:
         # Ensure sequence is a string and remove leading/trailing whitespace

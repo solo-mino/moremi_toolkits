@@ -131,14 +131,14 @@ def predict_bcell_epitopes(
 
     Returns:
         Dict[str, Any]: A dictionary containing the prediction results:
-            - "iedb_raw_results_df" (pd.DataFrame): DataFrame with per-residue scores and assignments.
-            - "predicted_epitopes" (List[Dict[str, Any]]): List of identified epitope peptides,
+        - "iedb_raw_results_df" (pd.DataFrame): DataFrame with per-residue scores and assignments.
+        - "predicted_epitopes" (List[Dict[str, Any]]): List of identified epitope peptides,
               each with start/end positions, sequence, length, and average score.
-            - "epitope_sequences_list" (List[str]): A simple list of the predicted epitope peptide sequences.
-            - "epitope_count" (int): Total number of identified epitope peptides.
-            - "overall_average_score" (float): Average score of all residues marked as epitopes.
-            - "parameters" (Dict[str, Any]): Input parameters used for the prediction.
-            On error, returns a dictionary with an "error" key and a descriptive message.
+        - "epitope_sequences_list" (List[str]): A simple list of the predicted epitope peptide sequences.
+        - "epitope_count" (int): Total number of identified epitope peptides.
+        - "overall_average_score" (float): Average score of all residues marked as epitopes.
+        - "parameters" (Dict[str, Any]): Input parameters used for the prediction.
+        On error, returns a dictionary with an "error" key and a descriptive message.
     """
     if not iedb:
         return {"error": "IEDB library is not installed or available. Please install `iedb` to use this function."}

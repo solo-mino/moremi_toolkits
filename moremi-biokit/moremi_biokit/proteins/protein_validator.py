@@ -7,7 +7,7 @@ and reporting purposes, while also calculating weighted scores for ranking.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any, Union
 import pandas as pd
 from enum import Enum
 import os
@@ -636,24 +636,37 @@ class ProteinValidator:
             )
 
     def process_proteins(self, input_file: str, output_dir: str = None) -> List[ProcessingResult]:
-        """Process multiple protein sequences from a file and save results to output directory"""
+        """Process multiple protein sequences from a file (text or FASTA) and save results to output directory."""
         try:
             # Create results directory
             results_dir = output_dir or os.path.join(os.path.dirname(input_file), "results")
             os.makedirs(results_dir, exist_ok=True)
             
-            # Read all sequences
+            sequences = []
+            current_sequence_lines = []
+            # Read all sequences from the input file
             with open(input_file, 'r') as f:
-                lines = [line.strip() for line in f.readlines()]
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or line.startswith("//"):
+                        continue # Skip empty lines and comments
+                    
+                    if line.startswith(">"): # FASTA header
+                        if current_sequence_lines: # Save previous sequence
+                            sequences.append("".join(current_sequence_lines))
+                            current_sequence_lines = []
+                        # We can store or log the header if needed, for now, we just use it as a separator
+                    else: # Sequence line
+                        current_sequence_lines.append(line)
             
-            # Filter out empty lines and comments
-            sequences = [line for line in lines if line and not line.startswith("#") and not line.startswith("//")]
-            
+            if current_sequence_lines: # Add the last sequence in the file
+                sequences.append("".join(current_sequence_lines))
+
             if not sequences:
-                logging.warning(f"No valid sequences found in {input_file}")
+                logging.warning(f"No valid sequences found in {input_file} (checked for plain and FASTA format)")
                 return []
                 
-            logging.info(f"Found {len(sequences)} protein sequences in {input_file}")
+            logging.info(f"Found {len(sequences)} protein sequences in {input_file} (parsed as plain/FASTA format)")
             
             results = []
             success_count = 0
@@ -800,142 +813,117 @@ class ProteinValidator:
         logging.info(f"✅ Successfully processed {len(successful)} out of {len(results)} proteins")
         return successful
     
-    # TODO: add option for validation single string 
-    def validate_proteins(self, sequence_list: List[str]) -> List[ProteinMetrics]:
+    def validate_proteins(self, sequence_list: Union[str, List[str]]) -> List[ProteinMetrics]:
         """
-        Validate a list of protein sequences and return valid proteins with metrics.
+        Validate a list of protein sequences or a single protein sequence string 
+        by calling process_protein for each and returns a list of ProteinMetrics for successful validations.
         
         Args:
-            sequence_list: List of protein sequences to validate
+            sequence_list: A single protein sequence string or a list of protein sequences to validate.
             
         Returns:
-            List of ProteinMetrics objects for valid proteins
+            List of ProteinMetrics objects for valid proteins.
         """
-        print(f"\nStarting validation of {len(sequence_list)} proteins...")
-        valid_metrics = []
+        
+        sequences_to_process: List[str]
+        if isinstance(sequence_list, str):
+            sequences_to_process = [sequence_list]
+        elif isinstance(sequence_list, list):
+            sequences_to_process = sequence_list
+        else:
+            logging.error("Invalid input type for sequence_list. Expected str or List[str].")
+            print("Error: Invalid input for sequence_list. Must be a string or a list of strings.")
+            return []
+
+        print(f"\nStarting validation of {len(sequences_to_process)} proteins by leveraging process_protein...")
+        valid_metrics_list = []
         invalid_count = 0
         
-        for idx, sequence in enumerate(sequence_list, 1):
-            try:
-                print(f"\nValidating protein {idx}/{len(sequence_list)}")
-                print(f"├── Sequence: {sequence[:20]}...")
-                
-                # Basic sequence validation
-                if not sequence or len(sequence) < 10:
-                    print(f"└── Invalid sequence: sequence is too short or empty")
-                    invalid_count += 1
-                    continue
-                
-                # Calculate basic properties
-                print(f"├── Calculating basic properties...")
-                analyzed_seq = ProteinAnalysis(sequence)
-                molecular_weight = analyzed_seq.molecular_weight()
-                molecular_formula = f"C{len(sequence)}H{len(sequence)*2}N{len(sequence)}O{len(sequence)}"
-                
-                # Initialize metrics container with basic properties
-                current_antigen_id = self.target_antigen_pdb_id or "Unknown"
-                metrics_obj = ProteinMetrics(
-                    sequence=sequence,
-                    antigen=self.target_antigen_sequence or "", # Use fetched/provided antigen sequence
-                    antigen_id=self.target_antigen_pdb_id or "Unknown", # Use PDB ID of the antigen
-                    molecular_weight=molecular_weight,
-                    molecular_formula=molecular_formula,
-                    blast={},
-                    protparam={},
-                    immunogenicity={},
-                    stability={},
-                    aggregation={},
-                    glycosylation={},
-                    binding_affinity={},
-                    structure={},
-                    epitope={},
-                    developability={},
-                    conservancy={},
-                    weighted_scores={},
-                    total_score=0.0,
-                    warnings=[]
-                )
-                
-                # Calculate all metrics
-                print(f"├── Running BLAST analysis...")
-                blast_result = perform_blast(sequence)
-                metrics_obj.blast = blast_result.get('blast_result', {})
-                
-                print(f"├── Running ProtParam analysis...")
-                protparam_result = analyze_with_protparam(sequence)
-                metrics_obj.protparam = protparam_result.get('protein_params', {})
-                
-                print(f"├── Running immunogenicity prediction...")
-                metrics_obj.immunogenicity = predict_immunogenicity(sequence)
-                
-                print(f"├── Running stability prediction...")
-                stability_result = predict_stability(sequence)
-                metrics_obj.stability = stability_result.get('stability_result', {})
-                
-                print(f"├── Running aggregation prediction...")
-                aggregation_result = predict_aggregation(sequence)
-                metrics_obj.aggregation = aggregation_result.get('aggregation_result', {})
-                
-                print(f"├── Running glycosylation prediction...")
-                metrics_obj.glycosylation = predict_glycosylation(sequence)
-                
-                print(f"├── Running structure prediction...")
-                structure_prediction_result = predict_structure(sequence, output_pdb_filename_prefix=molecular_formula, output_directory=self.pdb_files_path)
-                metrics_obj.structure = structure_prediction_result
-                
-                print(f"├── Running binding affinity prediction...")
-                if self.target_antigen_pdb_path and structure_prediction_result.get("pdb_file_path"):
-                    binding_result = predict_binding_affinity(structure_prediction_result['pdb_file_path'], self.target_antigen_pdb_path)
-                    metrics_obj.binding_affinity = binding_result
-                else:
-                    metrics_obj.binding_affinity = {"error": "Antigen PDB or protein PDB path not available for validation method"}
-                    logging.warning(f"Skipping binding affinity in validate_proteins for {sequence[:20]}")
-
-                print(f"├── Running epitope prediction...")
-                metrics_obj.epitope = predict_bcell_epitopes(sequence)
-                
-                print(f"├── Running conservancy prediction...")
-                metrics_obj.conservancy = predict_conservancy(sequence, metrics_obj.epitope.get('list_of_epitopes', []))
-                
-                print(f"├── Running developability prediction...")
-                metrics_obj.developability = predict_developability(sequence)
-                
-                # Calculate weighted scores
-                print(f"├── Calculating weighted scores...")
-                # Need to pass the metrics from metrics_obj to calculate_weighted_scores
-                temp_metrics_for_scoring = {
-                    'binding_affinity': metrics_obj.binding_affinity,
-                    'structure': metrics_obj.structure,
-                    'glycosylation': metrics_obj.glycosylation,
-                    'aggregation': metrics_obj.aggregation,
-                    'protparam': metrics_obj.protparam,
-                    'immunogenicity': metrics_obj.immunogenicity,
-                    'conservancy': metrics_obj.conservancy,
-                    'stability': metrics_obj.stability,
-                    'epitope': metrics_obj.epitope,
-                    'developability': metrics_obj.developability
-                }
-                weighted_scores, total_score = self.calculate_weighted_scores(temp_metrics_for_scoring)
-                metrics_obj.weighted_scores = weighted_scores
-                metrics_obj.total_score = total_score
-                
-                valid_metrics.append(metrics_obj)
-                print(f"└── Validation successful")
-                print(f"    ├── Formula: {metrics_obj.molecular_formula}")
-                print(f"    ├── Weight: {metrics_obj.molecular_weight:.2f} Da")
-                print(f"    └── Total Score: {metrics_obj.total_score:.4f}")
-                
-            except Exception as e:
-                print(f"└── Error during validation: {str(e)}")
+        for idx, sequence in enumerate(sequences_to_process, 1):
+            print(f"\nValidating protein {idx}/{len(sequences_to_process)}: {sequence[:20]}...")
+            result = self.process_protein(sequence) # Calls the main processing logic
+            
+            if result.success and result.metrics:
+                valid_metrics_list.append(result.metrics)
+                # process_protein already logs success, so we can keep this minimal
+                print(f"└── Validation successful for protein {idx} (via process_protein). Score: {result.metrics.total_score:.3f}")
+            else:
                 invalid_count += 1
-                continue
+                # process_protein already logs failure
+                print(f"└── Validation failed for protein {idx} (via process_protein). Error: {result.error}")
         
         print(f"\nValidation complete:")
-        print(f"├── Total proteins: {len(sequence_list)}")
-        print(f"├── Valid proteins: {len(valid_metrics)}")
-        print(f"└── Invalid proteins: {invalid_count}\n")
+        print(f"├── Total proteins attempted: {len(sequences_to_process)}")
+        print(f"├── Successfully validated (metrics collected): {len(valid_metrics_list)}")
+        print(f"└── Failed validation: {invalid_count}\n")
         
-        return valid_metrics
+        return valid_metrics_list
+
+    def get_metrics_as_dict_list(self, results: List[ProcessingResult]) -> List[Dict[str, Any]]:
+        """
+        Converts ProteinMetrics from a list of successful ProcessingResult objects into a list of dictionaries.
+
+        Args:
+            results: A list of ProcessingResult objects.
+
+        Returns:
+            A list of dictionaries, where each dictionary represents the metrics of a successfully processed protein.
+        """
+        dict_list = []
+        for result in results:
+            if result.success and result.metrics:
+                try:
+                    dict_list.append(result.metrics.to_dict())
+                except Exception as e:
+                    logging.error(f"Error converting metrics to dict for sequence {result.sequence[:20]}...: {e}")
+        return dict_list
+
+    def save_metrics_to_csv(self, results: List[ProcessingResult], output_csv_path: str):
+        """
+        Saves the ProteinMetrics from successful ProcessingResult objects to a CSV file.
+
+        Args:
+            results: A list of ProcessingResult objects.
+            output_csv_path: The path (including filename) to save the CSV file.
+        """
+        if not results:
+            logging.warning("No results provided to save_metrics_to_csv.")
+            print("Warning: No results to save to CSV.")
+            return
+
+        metrics_dict_list = self.get_metrics_as_dict_list(results)
+        
+        if not metrics_dict_list:
+            logging.warning("No successful metrics found to save to CSV.")
+            print("Warning: No successful metrics to save to CSV.")
+            return
+
+        try:
+            df = pd.DataFrame(metrics_dict_list)
+            
+            # Flatten nested dictionaries for better CSV representation if necessary
+            # For example, if 'metrics' is a nested dict:
+            if not df.empty and 'metrics' in df.columns:
+                # This is a basic way to flatten; more sophisticated flattening might be needed
+                # depending on the depth and structure of nested dicts.
+                try:
+                    metrics_expanded = pd.json_normalize(df['metrics'], sep='_')
+                    df = df.drop(columns=['metrics'])
+                    df = pd.concat([df, metrics_expanded], axis=1)
+                except Exception as e:
+                    logging.error(f"Could not fully flatten 'metrics' column for CSV: {e}. Proceeding with unflattened parts.")
+
+            # Ensure output directory exists
+            output_dir = os.path.dirname(output_csv_path)
+            if output_dir: # If output_csv_path includes a directory
+                os.makedirs(output_dir, exist_ok=True)
+            
+            df.to_csv(output_csv_path, index=False)
+            logging.info(f"Successfully saved metrics for {len(metrics_dict_list)} proteins to CSV: {output_csv_path}")
+            print(f"INFO: Metrics for {len(metrics_dict_list)} proteins saved to {output_csv_path}")
+        except Exception as e:
+            logging.error(f"Error saving metrics to CSV at {output_csv_path}: {e}")
+            print(f"ERROR: Could not save metrics to CSV: {e}")
 
     def save_results(self, results: List[ProcessingResult], output_dir: str):
         """

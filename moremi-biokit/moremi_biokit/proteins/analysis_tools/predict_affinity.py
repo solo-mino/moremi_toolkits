@@ -156,17 +156,17 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
     
     Returns:
         dict: Dictionary containing binding affinity prediction results including:
-            - intermolecular_contacts: Total number of contacts
-            - charged_charged_contacts: Number of charged-charged contacts
-            - charged_polar_contacts: Number of charged-polar contacts
-            - charged_apolar_contacts: Number of charged-apolar contacts
-            - polar_polar_contacts: Number of polar-polar contacts
-            - apolar_polar_contacts: Number of apolar-polar contacts
-            - apolar_apolar_contacts: Number of apolar-apolar contacts
-            - apolar_nis_percentage: Percentage of apolar NIS residues
-            - charged_nis_percentage: Percentage of charged NIS residues
-            - binding_affinity: Predicted binding affinity in kcal/mol
-            - dissociation_constant: Predicted dissociation constant in M at 25°C
+        - intermolecular_contacts: Total number of contacts
+        - charged_charged_contacts: Number of charged-charged contacts
+        - charged_polar_contacts: Number of charged-polar contacts
+        - charged_apolar_contacts: Number of charged-apolar contacts
+        - polar_polar_contacts: Number of polar-polar contacts
+        - apolar_polar_contacts: Number of apolar-polar contacts
+        - apolar_apolar_contacts: Number of apolar-apolar contacts
+        - apolar_nis_percentage: Percentage of apolar NIS residues
+        - charged_nis_percentage: Percentage of charged NIS residues
+        - binding_affinity: Predicted binding affinity in kcal/mol
+        - dissociation_constant: Predicted dissociation constant in M at 25°C
     """
     print(f"Processing files:\n- {receptor}\n- {ligand}")
     

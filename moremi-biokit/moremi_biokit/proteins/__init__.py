@@ -29,7 +29,7 @@ from .protein_ranker import (
 
 # Expose all submodules for easier access if needed by users
 from . import analysis_tools
-from . import utils
+# from . import utils
 from . import reports
 
 __all__ = [
@@ -46,7 +46,7 @@ __all__ = [
     # From batch_protein_processor
     "BatchProteinProcessor",
     
-    "utils",
+    # "utils",
     "reports",
     "analysis_tools"
 ]

@@ -22,7 +22,7 @@ from .glycosylation_analyzer import predict_glycosylation
 from .structure_predictor import predict_structure
 from .epitope_predictor import predict_bcell_epitopes, get_epitope_sequences_from_prediction, VALID_IEDB_BCELL_METHODS
 from .conservancy import EpitopeConservancyAnalyzer, predict_conservancy
-from .developability import AntibodyComparisonTool, predict_developability
+from .developability import ProteinComparisonTool, predict_developability
 from .predict_affinity import predict_binding_affinity
 from .immunogenicity import predict_immunogenicity
 
@@ -45,5 +45,5 @@ __all__ = [
     
     # Classes
     "EpitopeConservancyAnalyzer",
-    "AntibodyComparisonTool",
+    "ProteinComparisonTool",
 ]

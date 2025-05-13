@@ -21,14 +21,14 @@ def predict_stability(sequence: str) -> Dict[str, Any]:
     Returns:
         Dict[str, Any]: A dictionary containing the stability prediction results
             under the key "stability_result". This includes:
-            - "melting_temperature_celsius" (float): Estimated melting temperature in °C.
-            - "normalized_stability_score" (float): Calculated stability score (normalized).
-            - "details" (Dict[str, int]): 
-                - "stabilizing_residues_count" (int): Count of stabilizing residues.
-                - "destabilizing_residues_count" (int): Count of destabilizing residues.
-                - "sequence_length" (int): Length of the input sequence.
-                - "unrecognized_residues_count" (int): Count of unrecognized residues.
-            Returns an {"error": "message"} dictionary if the sequence is empty or invalid.
+        - "melting_temperature_celsius" (float): Estimated melting temperature in °C.
+        - "normalized_stability_score" (float): Calculated stability score (normalized).
+        - "details" (Dict[str, int]): 
+            - "stabilizing_residues_count" (int): Count of stabilizing residues.
+            - "destabilizing_residues_count" (int): Count of destabilizing residues.
+            - "sequence_length" (int): Length of the input sequence.
+            - "unrecognized_residues_count" (int): Count of unrecognized residues.
+        Returns an {"error": "message"} dictionary if the sequence is empty or invalid.
     """
     if not isinstance(sequence, str) or not sequence.strip():
         return {"error": "Input sequence cannot be empty or invalid."}

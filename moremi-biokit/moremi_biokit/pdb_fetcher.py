@@ -308,11 +308,11 @@ def fetch_pdb(
     Args:
         target (Union[str, List[str]]): The main input. Its meaning depends on `input_type`.
         
-                - If `input_type` is 'identifier': A PDB ID (e.g., "1xyz") or other database ID.
-                - If `input_type` is 'sequence': An amino acid sequence string.
-                - If `input_type` is 'sequence_list': A list of amino acid sequence strings (only the first is used for prediction).
-                - If `input_type` is 'sequence_file': Path to a file containing sequence(s) (FASTA or plain, first sequence used).
-                - If `input_type` is 'local_pdb_file': Path to an existing PDB file on the local system.
+        - If `input_type` is 'identifier': A PDB ID (e.g., "1xyz") or other database ID.
+        - If `input_type` is 'sequence': An amino acid sequence string.
+        - If `input_type` is 'sequence_list': A list of amino acid sequence strings (only the first is used for prediction).
+        - If `input_type` is 'sequence_file': Path to a file containing sequence(s) (FASTA or plain, first sequence used).
+        - If `input_type` is 'local_pdb_file': Path to an existing PDB file on the local system.
             
         input_type (str, optional): Specifies how to interpret `target`.
             Choices: 'identifier', 'sequence', 'sequence_list', 'sequence_file', 'local_pdb_file'. 
@@ -341,23 +341,23 @@ def fetch_pdb(
             return {"status": "error", "source": source_db or "internal", "identifier": str(target)[:50], "message": "Target for input_type 'identifier' must be a string ID."}
         identifier_str = target
         if use_internal_db:
-            pdb_content = read_internal_pdb(identifier_str, internal_pdb_category)
-            if pdb_content:
+            # pdb_content = read_internal_pdb(identifier_str, internal_pdb_category)
+            # if pdb_content:
+            #     return {
+            #         "status": "success", "source": "internal", "identifier": identifier_str,
+            #         "pdb_path": None, "pdb_content": pdb_content,
+            #         "message": f"Successfully read internal PDB: {identifier_str}"
+            #     }
+            # else:
+            pdb_path = get_internal_pdb_path(identifier_str, internal_pdb_category)
+            if pdb_path:
                 return {
-                    "status": "success", "source": "internal", "identifier": identifier_str,
-                    "pdb_path": None, "pdb_content": pdb_content,
-                    "message": f"Successfully read internal PDB: {identifier_str}"
+                "status": "success", "source": "internal", "identifier": identifier_str,
+                "pdb_path": pdb_path, "pdb_content": None,
+                "message": f"Found internal PDB path: {pdb_path}."
                 }
             else:
-                 pdb_path = get_internal_pdb_path(identifier_str, internal_pdb_category)
-                 if pdb_path:
-                     return {
-                        "status": "success", "source": "internal", "identifier": identifier_str,
-                        "pdb_path": pdb_path, "pdb_content": None,
-                        "message": f"Found internal PDB path: {pdb_path}."
-                     }
-                 else:
-                    return {"status": "error", "source": "internal", "identifier": identifier_str, "message": f"Internal PDB ID '{identifier_str}' not found."}
+                return {"status": "error", "source": "internal", "identifier": identifier_str, "message": f"Internal PDB ID '{identifier_str}' not found."}
         else: # External database download
             if not output_dir:
                 return {"status": "error", "source": source_db, "identifier": identifier_str, "message": "output_dir is required for external database downloads."}

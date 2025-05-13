@@ -63,19 +63,19 @@ def predict_glycosylation(sequence: str, o_glyc_window_size: int = 5, o_glyc_fav
 
     Returns:
         Dict[str, Any]: A dictionary with glycosylation prediction results:
-            - "n_glycosylation" (Dict[str, Any]):
-                - "sites" (List[Dict[str, Any]]): List of predicted N-glyc sites, each with:
-                    - "position" (int): 1-based position of N.
-                    - "sequon" (str): The N-X-S/T sequon found.
-                    - "confidence" (str): Estimated confidence ('High', 'Medium', 'Low', 'Very Low').
-                - "count" (int): Total number of N-glyc sites.
-            - "o_glycosylation" (Dict[str, Any]):
-                - "sites" (List[Dict[str, Any]]): List of predicted O-glyc sites, each with:
-                    - "position" (int): 1-based position of S/T.
-                    - "residue" (str): The S or T residue.
-                    - "context_window" (str): Amino acid context around the site.
-                - "count" (int): Total number of O-glyc sites.
-            Returns an {"error": "message"} dict if the input sequence is invalid.
+        - "n_glycosylation" (Dict[str, Any]):
+            - "sites" (List[Dict[str, Any]]): List of predicted N-glyc sites, each with:
+                - "position" (int): 1-based position of N.
+                - "sequon" (str): The N-X-S/T sequon found.
+                - "confidence" (str): Estimated confidence ('High', 'Medium', 'Low', 'Very Low').
+            - "count" (int): Total number of N-glyc sites.
+        - "o_glycosylation" (Dict[str, Any]):
+            - "sites" (List[Dict[str, Any]]): List of predicted O-glyc sites, each with:
+                - "position" (int): 1-based position of S/T.
+                - "residue" (str): The S or T residue.
+                - "context_window" (str): Amino acid context around the site.
+            - "count" (int): Total number of O-glyc sites.
+        Returns an {"error": "message"} dict if the input sequence is invalid.
     """
     if not isinstance(sequence, str) or not sequence.strip():
         return {"error": "Input sequence cannot be empty or invalid."}

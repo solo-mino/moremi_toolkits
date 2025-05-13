@@ -235,9 +235,9 @@ def predict_conservancy(
 
     Returns:
         A dictionary containing:
-            - 'results' (pd.DataFrame or str): DataFrame with conservancy analysis results, 
+        - 'results' (pd.DataFrame or str): DataFrame with conservancy analysis results, 
               or a string message if no epitopes were provided.
-            - 'conservancy_score' (float): A score from 0 to 1 representing the overall 
+        - 'conservancy_score' (float): A score from 0 to 1 representing the overall 
               conservation across all analyzed epitopes.
         Returns a dictionary with an 'error' key if initialization or analysis fails.
     """
