@@ -205,6 +205,29 @@ If you need to clone or install from this private repository, you'll need to aut
 
    **NB:** This step is *optional* as the package in the `step 2` will install all the needed dependencies.
 
+### 5.3. Upgrading `moremi-biokit`
+
+To upgrade to the latest version of `moremi-biokit` from the repository after the developers have pushed updates (and importantly, incremented the package version in `moremi-biokit/pyproject.toml`):
+
+1. **Activate your Conda environment:**
+
+    ```bash
+    conda activate my_agent_env  # Or your specific environment name
+    ```
+
+2. **Run the upgrade command:**
+    This command forces pip to check the remote repository for the latest version on the specified branch and ignore any locally cached versions.
+
+    - **From the `main` branch (example):**
+
+    ```bash
+    pip install --upgrade --no-cache-dir git+ssh://git@github.com/solo-mino/moremi_toolkits.git@main#subdirectory=moremi-biokit
+    ```
+
+    Make sure to replace `@main` with the correct branch if you are tracking a different one.
+
+    This ensures you get the freshest code from the repository.
+
 ## 6. Contribution Guidelines 🤝
 
 (Detail your internal contribution process here)
