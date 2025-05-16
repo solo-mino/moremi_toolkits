@@ -1,5 +1,6 @@
 admet_ai
 torch==2.5.1
+prodigy-prot
 biopython
 iedb
 pandas
@@ -13,10 +14,6 @@ requests
 rdkit
 py3Dmol
 openbabel
-pyfaidx
 
 
-perfect now i think there are 2 more changes we have to. so you see some of the pipeline require you provide another sequence(mostly antigent sequce) for some other processing like the epitope. i want us to add the parameter the contructor of 3 of th automatic pipelint that you pass file  and it'll do all at once for you. i want it so that we add a parameter so that the user can pass that parameter i am talking about so that the epitope for instance can use and other ones as well (for only epitope uses it). so the user should provide an antigen protein sequence  or provide the antigen pdb_id with chain_id(like 1xyz_A, ehn we wplit it ourself and pass it to the @get_pdb_chain_sequence_details from @rcsb.py  ) which will use that to fetch sequence for us. also if the user has the antigen pdb path to, the user can pass it well then we'll use that instead of using using the target_antigen_pdb_id do download the pdb and use it. and also thhat parameter let make it target_antigen_pdb_chain_id so that we can extracte the id from and use it for the downloading part.(Please don't forget to keep in mind when we extract to download, we covert it to uppercase and for search for sequence it shoule lowercase for the pdb_id). so when the if user provides path to pdb local pdf we use the local pdf alone with str antigen. if user provides provides target_pdb_chain_id we download the pdf and get the str as well. you get the concept. so let ensure user must provide some parameter essentioal to get this done.
-1. please let first work on the @protein_validator.py 
-
-after you're let me know then we move to the next please
+# yes we'll do same for the smiles as well. but erm sorry i was taking about @batch_protein_processor.py . and also about making that part the ones that will not be part of the ranking 0 i don't is the ideal way. cause when the result comes out it going to be like that paricular one is 0 is something. so let make it so that those ones don't show at all in the result

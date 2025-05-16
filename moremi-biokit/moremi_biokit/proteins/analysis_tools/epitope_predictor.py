@@ -16,7 +16,7 @@ try:
 except ImportError:
     iedb = None # Allows for type checking without runtime error if not installed
 
-IEDB_DEFAULT_METHOD = "Bepipred-2.0" # Bepipred-2.0 is often a good default
+IEDB_DEFAULT_METHOD = "Bepipred" # Bepipred-2.0 is often a good default
 VALID_IEDB_BCELL_METHODS: List[str] = [
     "Chou-Fasman", "Emini", "Karplus-Schulz", 
     "Kolaskar-Tongaonkar", "Parker", "Bepipred", "Bepipred-2.0"

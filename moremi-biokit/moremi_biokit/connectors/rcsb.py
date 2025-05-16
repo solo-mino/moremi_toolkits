@@ -20,11 +20,13 @@ import os
 from typing import Optional, Dict, List, Any
 from ._utils import make_api_request, APIRequestError
 from . import local_pdb_fasta_parser # Import the new local parser module
+import requests # For requests.exceptions.JSONDecodeError
 
 # RCSB PDB API Endpoints
 RCSB_DATA_API_ENDPOINT = "https://data.rcsb.org/graphql"
 RCSB_SEARCH_API_ENDPOINT = "https://search.rcsb.org/rcsbsearch/v2/query"
 RSCB_REST_API_ENDPOINT = "https://data.rcsb.org/rest/v1/core/entry"
+LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT = "http://localhost:8000/api/v1/sequence"
 
 
 def download_pdb_from_rcsb(pdb_id: str, output_dir: str, file_format: str = 'pdb') -> Optional[str]:
@@ -102,7 +104,7 @@ def download_pdb_from_rcsb(pdb_id: str, output_dir: str, file_format: str = 'pdb
 # (GraphQL query constants and endpoint would be defined here)
 #NOTE: An agent would call these tools and use compare these fields (obtained for a PDB ID it selected) against the requirements of its current task.
 
-# TODO: LOOKE THROUGH GRAPH QUERY AND MAKE SOME MODIFICATIONS, RAISES ERROR CATCHING AND SO ON
+# TODO: LOOK THROUGH GRAPH QUERY AND MAKE SOME MODIFICATIONS, RAISES ERROR CATCHING AND SO ON
 def fetch_pdb_verification_summary(pdb_id: str) -> Optional[Dict[str, Any]]:
     """
     Fetches a curated set of metadata for a given PDB ID from RCSB PDB
@@ -678,212 +680,97 @@ def search_rcsb_by_sequence(
         print(f"An unexpected error occurred during sequence search: {e}\n{traceback.format_exc()}")
         return None
 
-# TODO: DELETE THIS FUNCTION AFTER SOME REVIEW
-def fetch_pdb_sequence(pdb_id: str) -> Optional[Dict[str, str]]:
-    """Fetches FASTA sequences for a given PDB ID from RCSB PDB.
-
-    This function downloads the FASTA file for the specified PDB ID and
-    parses it to extract all sequences present. It returns a dictionary where
-    keys are the sequence identifiers from the FASTA headers (e.g., "4HHB_A")
-    and values are the corresponding raw protein or nucleic acid sequences,
-    concatenated into a single string without header lines or newlines.
+def fetch_sequence_details_by_pdb_chain_id(pdb_chain_id: str) -> Optional[Dict[str, Any]]:
+    """Fetches sequence and details for a specific PDB ID and chain ID from the local microservice.
 
     Args:
-        pdb_id (str): The 4-character PDB ID (case-insensitive).
-
-    Returns:
-        Optional[Dict[str, str]]: A dictionary mapping sequence identifiers to their
-        sequences if successful. Returns None if the PDB ID is invalid,
-        the FASTA file cannot be fetched, or an error occurs during parsing.
-    """
-    if not isinstance(pdb_id, str) or len(pdb_id) != 4:
-        print(f"Error: Invalid PDB ID '{pdb_id}'. Must be a 4-character string.")
-        return None
-    
-    pdb_id_lower = pdb_id.lower()
-    fasta_url = f"https://files.rcsb.org/download/{pdb_id_lower}.fasta"
-
-    print(f"Attempting to download FASTA for {pdb_id} from {fasta_url}...")
-    
-    sequences_dict: Dict[str, str] = {}
-    try:
-        # make_api_request by default expects JSON, so we need to handle text response
-        response = make_api_request(
-            url=fasta_url,
-            method="GET",
-            is_json_response=False, # Explicitly state we expect text
-            timeout=60
-        )
-
-        if response is None: # make_api_request returns None on error if is_json_response=False and parsing fails (not applicable here) or for critical errors
-            print(f"Failed to retrieve FASTA data for {pdb_id}. Response was None.")
-            return None
-
-        # The response from make_api_request (when is_json_response=False) should be the text content or raise APIRequestError
-        # However, the current _utils.make_api_request might return the requests.Response object itself
-        # if is_json_response is False and the request was successful before JSON parsing would occur.
-        # We need to ensure we get the text content.
-        # For now, let's assume make_api_request with is_json_response=False will give us text or throw an error.
-        # If it gives a Response object, we'd need response.text
-        # Based on current usage, if it returns something and not an error, it should be text.
-        
-        fasta_content: str
-        if isinstance(response, str): # If make_api_request directly returns text for non-JSON
-            fasta_content = response
-        # If make_api_request were to return the raw requests.Response object:
-        # elif hasattr(response, 'text'): 
-        #     fasta_content = response.text
-        else:
-            # This case should ideally not be reached if make_api_request behaves as expected for non-JSON
-            print(f"Unexpected response type from API request for FASTA: {type(response)}")
-            return None
-
-        if not fasta_content.strip():
-            print(f"FASTA content for {pdb_id} is empty.")
-            return {} # Return empty dict for empty FASTA
-
-        # Parse FASTA content
-        current_identifier = ""
-        current_sequence_parts = []
-
-        lines = fasta_content.splitlines()
-        if not lines or not lines[0].startswith(">"):
-            print(f"Error: Downloaded content for {pdb_id} does not appear to be a valid FASTA file (no header found).")
-            # Check if it's an HTML error page for 404s not caught by make_api_request for non-JSON
-            if "<html" in fasta_content.lower() and ("not found" in fasta_content.lower() or "error" in fasta_content.lower()):
-                 print(f"It seems PDB ID {pdb_id} (FASTA) was not found on RCSB (HTML error page returned).")
-            return None
-            
-        for line in lines:
-            line = line.strip()
-            if not line: # Skip empty lines
-                continue
-            if line.startswith(">"):
-                # If there was a previous sequence, store it
-                if current_identifier and current_sequence_parts:
-                    sequences_dict[current_identifier] = "".join(current_sequence_parts)
-                
-                # Start new sequence
-                try:
-                    current_identifier = line[1:].split()[0] # Get identifier after '>' up to first space
-                except IndexError:
-                    print(f"Warning: Could not parse identifier from FASTA header: {line}")
-                    current_identifier = line[1:] # Fallback to full header without '>'
-                current_sequence_parts = []
-            else:
-                # Append sequence line (ensure it's not a non-sequence line accidentally)
-                if current_identifier and all(c.isalpha() or c == '*' for c in line): # Basic check for sequence characters
-                    current_sequence_parts.append(line)
-                elif current_identifier: # Non-sequence line encountered for current identifier
-                    print(f"Warning: Non-sequence line encountered in FASTA for {current_identifier}: {line}")
-
-        # Store the last sequence in the file
-        if current_identifier and current_sequence_parts:
-            sequences_dict[current_identifier] = "".join(current_sequence_parts)
-        
-        if not sequences_dict:
-            print(f"No sequences could be parsed from the FASTA file for {pdb_id}, though content was present.")
-            return None # Or {} if empty but valid FASTA was processed (e.g. only headers)
-
-        print(f"Successfully parsed {len(sequences_dict)} sequence(s) for {pdb_id}.")
-        return sequences_dict
-
-    except APIRequestError as api_err:
-        if api_err.status_code == 404:
-            print(f"Error: FASTA file for PDB ID '{pdb_id}' not found on RCSB PDB (URL: {api_err.url}).")
-        else:
-            print(f"API Error downloading FASTA for {pdb_id}: {api_err}")
-        return None
-    except Exception as e:
-        import traceback
-        print(f"An unexpected error occurred while fetching/parsing FASTA for {pdb_id}: {e}\n{traceback.format_exc()}")
-        return None
-
-# TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
-def get_pdb_chain_sequence_details(pdb_id: str, chain_id: str) -> Optional[Dict[str, Any]]:
-    """Fetches sequence and details for a specific PDB ID and chain ID.
-
-    It first attempts to retrieve the sequence from the local PDB FASTA database.
-    If not found locally, it falls back to fetching the full FASTA file for the PDB ID
-    from the RCSB online service and extracting the specific chain.
-
-    Args:
-        pdb_id (str): The 4-character PDB ID (case-insensitive).
-        chain_id (str): The chain identifier (case-insensitive, will be normalized to uppercase).
+        pdb_chain_id (str): The PDB ID and chain ID (e.g., "101m_A", case-insensitive for input parts).
 
     Returns:
         Optional[Dict[str, Any]]: A dictionary containing sequence details:
             {
-                "id": "pdbid_CHAIN", (e.g., "1xyz_A")
-                "pdb_id": "1xyz", (lowercase)
+                "id": "pdbid_CHAIN", (e.g., "101m_A", normalized)
+                "pdb_id": "101m", (lowercase)
                 "chain_id": "A", (uppercase)
                 "sequence": "SEQUENCE...",
                 "length": sequence_length,
-                "description": "Full FASTA header line..."
+                "description": "Description from API or a default."
             }
         Returns None if the sequence cannot be found or an error occurs.
     """
-    if not isinstance(pdb_id, str) or len(pdb_id) != 4 or not chain_id or not isinstance(chain_id, str):
-        print("Error: Invalid PDB ID (must be 4-char string) or chain ID (must be string) provided.")
+    if not isinstance(pdb_chain_id, str) or '_' not in pdb_chain_id:
+        # Using print for now, consider proper logging for a library
+        print(f"Error (fetch_sequence_details_by_pdb_chain_id): Invalid pdb_chain_id format: '{pdb_chain_id}'. Expected 'PDBID_CHAIN'.")
         return None
 
-    norm_pdb_id = pdb_id.lower()
-    norm_chain_id = chain_id.upper()
-    target_query_id = f"{norm_pdb_id}_{norm_chain_id}" # For messages and matching online result
+    try:
+        pdb_id_part, chain_id_part = pdb_chain_id.split('_', 1)
+        if not pdb_id_part or not chain_id_part: # Ensure both parts are non-empty after split
+             raise ValueError("PDB ID or Chain ID part is empty after split.")
+    except ValueError as e:
+        print(f"Error (fetch_sequence_details_by_pdb_chain_id): Could not parse pdb_chain_id '{pdb_chain_id}': {e}")
+        return None
 
-    print(f"Attempting to fetch sequence for {target_query_id} from local PDB FASTA DB...")
-    local_sequence_details = local_pdb_fasta_parser.get_sequence_by_pdb_chain_id(pdb_id, chain_id)
+    normalized_pdb_id = pdb_id_part.lower()
+    normalized_chain_id = chain_id_part.upper()
+    # This is the format the API endpoint expects and also the "id" for the output dict
+    api_target_pdb_chain_id = f"{normalized_pdb_id}_{normalized_chain_id}"
 
-    if local_sequence_details:
-        print(f"Found sequence for {target_query_id} in local PDB FASTA DB.")
-        return local_sequence_details
-
-    print(f"Sequence for {target_query_id} not found in local PDB FASTA DB. Attempting online RCSB FASTA download...")
-
-    # Fallback to online fetching using the existing fetch_pdb_sequence (which gets all chains for a PDB ID)
-    all_online_chains_data = fetch_pdb_sequence(pdb_id) # This is the original function returning Dict[str, str]
+    # Microservice endpoint URL
+    # For local dev: http://localhost:8000/api/v1/sequence/{pdb_chain_id}
+    api_url = f"{LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT}/{api_target_pdb_chain_id}"
     
-    if all_online_chains_data is None:
-        print(f"Online FASTA download failed for PDB ID {pdb_id}. Cannot fetch {target_query_id}.")
-        return None
     
-    if not all_online_chains_data: # Empty dict from online source
-        print(f"No sequences found in online FASTA for PDB ID {pdb_id}. Cannot fetch {target_query_id}.")
-        return None
+    # Consider using proper logging in a library context
+    print(f"Info (fetch_sequence_details_by_pdb_chain_id): Fetching from microservice: {api_url}")
 
-    # Search for the specific chain in the online results
-    # Keys from fetch_pdb_sequence are like '100d_A' (PDB ID part case as in FASTA header)
-    found_online_sequence_str = None
-    found_online_header_key = None
+    try:
+        response = make_api_request(url=api_url, method="GET")
+        # make_api_request handles retries and raises APIRequestError for HTTP errors.
+        # If it returns, it means the HTTP request itself was successful (e.g. 200 OK).
+        
+        api_data = response.json() # Can raise requests.exceptions.JSONDecodeError
 
-    for header_key, sequence_str in all_online_chains_data.items():
-        try:
-            key_pdb_part, key_chain_part = header_key.split('_', 1)
-            if key_pdb_part.lower() == norm_pdb_id and key_chain_part.upper() == norm_chain_id:
-                found_online_sequence_str = sequence_str
-                found_online_header_key = header_key # Preserve the original header key for description placeholder
-                break
-        except ValueError: # Handles cases where header_key might not have an underscore
-            if header_key.lower() == norm_pdb_id and norm_chain_id == '' : # Match if PDB ID alone is the key and no chain was requested (edge case)
-                #This scenario is less likely given chain_id is a required arg for this function
-                pass 
-            continue
+        if not isinstance(api_data, dict):
+            print(f"Error (fetch_sequence_details_by_pdb_chain_id): API response for '{api_target_pdb_chain_id}' is not a valid JSON object.")
+            return None
 
-    if found_online_sequence_str and found_online_header_key:
-        print(f"Found sequence for {target_query_id} via online FASTA fallback.")
-        # NOTE: The 'description' from this online fallback is a placeholder.
-        # The original `fetch_pdb_sequence` only returns id->sequence.
-        # To get the full original FASTA header line, `fetch_pdb_sequence` would need refactoring.
+        sequence = api_data.get("sequence")
+        if not sequence or not isinstance(sequence, str):
+            print(f"Error (fetch_sequence_details_by_pdb_chain_id): 'sequence' not found or is not a string in API response for '{api_target_pdb_chain_id}'.")
+            return None
+
+        # Extract details, ensuring correct casing and types for the output dict
+        # Use API provided pdb_id and chain_id if available, otherwise stick to normalized input parts.
+        # The API sample returns "pdb_id" and "chain_id" correctly cased.
+        out_pdb_id = str(api_data.get("pdb_id", normalized_pdb_id)).lower()
+        out_chain_id = str(api_data.get("chain_id", normalized_chain_id)).upper()
+        
+        out_length = api_data.get("length")
+        if not isinstance(out_length, int):
+            print(f"Warning (fetch_sequence_details_by_pdb_chain_id): 'length' from API for '{api_target_pdb_chain_id}' is missing or not an integer. Calculating from sequence.")
+            out_length = len(sequence)
+        
+        out_description = api_data.get("description", f"Sequence for {api_target_pdb_chain_id}")
+
         return {
-            "id": target_query_id, # Use the normalized query ID
-            "pdb_id": norm_pdb_id,
-            "chain_id": norm_chain_id,
-            "sequence": found_online_sequence_str,
-            "length": len(found_online_sequence_str),
-            "description": f">{found_online_header_key} ... (Description from online fallback; full header not available from current fetch_pdb_sequence)" 
+            "id": api_target_pdb_chain_id, # e.g., "101m_a" -> "101m_A" as per api_target_pdb_chain_id normalization
+            "pdb_id": out_pdb_id,
+            "chain_id": out_chain_id,
+            "sequence": sequence,
+            "length": out_length,
+            "description": str(out_description) # Ensure description is string
         }
-    else:
-        print(f"Target sequence {target_query_id} not found in the downloaded online FASTA for PDB ID {pdb_id}.")
+
+    except APIRequestError as e:
+        # Logged by make_api_request during retries, this is the final failure.
+        print(f"Error (fetch_sequence_details_by_pdb_chain_id): API request failed for '{api_target_pdb_chain_id}': {e}")
+        return None
+    except requests.exceptions.JSONDecodeError as e:
+        print(f"Error (fetch_sequence_details_by_pdb_chain_id): Failed to decode JSON response from '{api_url}': {e}")
+        return None
+    except Exception as e: # Catch any other unexpected errors during processing
+        print(f"Error (fetch_sequence_details_by_pdb_chain_id): An unexpected error occurred for '{api_target_pdb_chain_id}': {e}")
         return None
 
 # TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
@@ -903,63 +790,5 @@ def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
         `get_pdb_chain_sequence_details`. Returns an empty list if no
         sequences can be found or an error occurs.
     """
-    if not isinstance(pdb_id, str) or len(pdb_id) != 4:
-        print("Error: Invalid PDB ID (must be 4-char string) provided.")
-        return []
+    pass
 
-    norm_pdb_id = pdb_id.lower()
-    print(f"Attempting to fetch all sequences for PDB ID {norm_pdb_id} from local PDB FASTA DB...")
-    local_results = local_pdb_fasta_parser.get_all_sequences_by_pdb_id(pdb_id)
-
-    if local_results: # If local_results is not an empty list
-        print(f"Found {len(local_results)} sequence(s) for PDB ID {norm_pdb_id} in local PDB FASTA DB.")
-        return local_results
-    
-    # If local_results is an empty list, it means PDB ID not found or DB init error.
-    print(f"No sequences found for {norm_pdb_id} in local PDB FASTA DB or DB is unavailable. Attempting online RCSB FASTA download...")
-
-    # Fallback to online fetching using the existing fetch_pdb_sequence
-    all_online_chains_data = fetch_pdb_sequence(pdb_id) # Original function returning Dict[str, str]
-
-    if all_online_chains_data is None: # API error or download failure for the PDB ID
-        print(f"Online FASTA download failed for PDB ID {norm_pdb_id}.")
-        return []
-    
-    if not all_online_chains_data: # Empty dictionary from online source (e.g., FASTA file was empty)
-        print(f"Online FASTA for {norm_pdb_id} was empty or contained no parsable sequences.")
-        return []
-
-    online_results_list: List[Dict[str, Any]] = []
-    for header_key, sequence_str in all_online_chains_data.items():
-        try:
-            # header_key is like '1XYZ_A' (case from FASTA) or potentially just '1XYZ' if no chain in that specific FASTA entry
-            key_pdb_part, key_chain_part = header_key.split('_', 1) if '_' in header_key else (header_key, None)
-            
-            if key_pdb_part.lower() == norm_pdb_id: # Match PDB ID part case-insensitively
-                chain_id_to_store = key_chain_part.upper() if key_chain_part else None
-                current_id = f"{norm_pdb_id}_{chain_id_to_store}" if chain_id_to_store else norm_pdb_id
-
-                online_results_list.append({
-                    "id": current_id,
-                    "pdb_id": norm_pdb_id,
-                    "chain_id": chain_id_to_store,
-                    "sequence": sequence_str,
-                    "length": len(sequence_str),
-                    "description": f">{header_key} ... (Description from online fallback; full header not available from current fetch_pdb_sequence)" 
-                })
-        except ValueError: # Should not happen with the revised split logic
-            print(f"Warning: Could not parse header key '{header_key}' from online FASTA for {norm_pdb_id}. Skipping.")
-            continue
-            
-    if not online_results_list:
-         print(f"No sequences matching PDB ID {norm_pdb_id} were extracted from online FASTA after processing.")
-    else:
-        print(f"Found {len(online_results_list)} sequence(s) for {norm_pdb_id} via online FASTA fallback.")
-
-    return online_results_list
-
-
-# Potentially other search functions:
-# def search_rcsb_by_ligand(ligand_id: str, max_results: int = 10) -> Optional[List[Dict[str, Any]]]:
-#     """Searches RCSB PDB for entries containing a specific ligand. ...
-#     pass  

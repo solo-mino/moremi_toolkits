@@ -50,7 +50,7 @@ from .smiles import (
 
 from .proteins import (
     BatchProteinProcessor,
-    ProteinValidator,
+    ProteinValidatorV2,
     ProteinRanker,
     MetricCategory,
     ProcessingResult,
@@ -74,7 +74,7 @@ __all__ = [
     "ScoringConfig",
     
     "BatchProteinProcessor",
-    "ProteinValidator",
+    "ProteinValidatorV2",
     "ProteinRanker",
     "MetricCategory",
     "ProcessingResult",

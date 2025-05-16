@@ -7,7 +7,7 @@
 *.pkl
 rcsb_pdb_sequence_db.txt
 
-protein_notebook_outputs/
+# protein_notebook_outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

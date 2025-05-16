@@ -163,19 +163,18 @@ def predict_structure(
             "message": "Structure prediction successful.",
             "project_id": project_id,
             "gmqe": model_info.get("gmqe"),
-            "model_details": {
-                "model_id": model_info.get("model_id"),
-                # "gmqe": model_info.get("gmqe"),
-                "qmean_disco_global": model_info.get("qmean_disco_global"),
-                "qmean_z_score": model_info.get("qmean4_z_score"), # Often qmean4_z_score is used
-                "seqid": model_info.get("seqid"),
-                "template": model_info.get("template_description"),
-                "method": model_info.get("method"),
-                "coverage": model_info.get("coverage"),
-                "ligands": model_info.get("ligands"),
-                "created_date": model_info.get("created_date")
-                # Add other relevant fields from model_info as needed
-            },
+            # "model_details": {
+            #     "model_id": model_info.get("model_id"),
+            #     "qmean_disco_global": model_info.get("qmean_disco_global"),
+            #     "qmean_z_score": model_info.get("qmean4_z_score"), # Often qmean4_z_score is used
+            #     "seqid": model_info.get("seqid"),
+            #     "template": model_info.get("template_description"),
+            #     "method": model_info.get("method"),
+            #     "coverage": model_info.get("coverage"),
+            #     "ligands": model_info.get("ligands"),
+            #     "created_date": model_info.get("created_date")
+            #     # Add other relevant fields from model_info as needed
+            # },
             "pdb_file_path": pdb_file_path,
             # TODO: DELETE FOR NOW BECAUSE OG LARGE PDB
             # "pdb_content": pdb_content # Be cautious with large PDB files in memory

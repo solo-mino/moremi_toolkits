@@ -176,6 +176,8 @@ If you need to clone or install from this private repository, you'll need to aut
    pytest ./moremi-biokit/tests/
    ```
 
+   ⚠️ **Important Notice for Developers**: Always remember to update the version number in `pyproject.toml` when making changes. If the version is not incremented, the `pip install --upgrade` command will not detect new changes and the package will not update for users.
+
 ### 5.2. For Consumers of `moremi-biokit` (e.g., the Moremi Bio Agent project)
 
 1. **Set up a Conda environment with necessary dependencies:**

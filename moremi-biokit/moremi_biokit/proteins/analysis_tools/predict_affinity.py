@@ -29,7 +29,7 @@ def _combine_pdb_files(receptor, ligand, output_path):
         out.write('END\n')
 
 
-def save_results(sequence_num, affinity, prodigy_output, ligand_path, receptor_path, error=None, output_dir="hepatitis_binding_results"):
+def save_results(sequence_num, affinity, prodigy_output, ligand_path, receptor_path, error=None, output_dir="binding_results"):
     """Save results to a text file with sequence number and timestamp"""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -97,7 +97,7 @@ def _analyze_sequence_gaps(pdb_files):
     return min_seq, max_seq, missing_sequences
 
 
-def _save_summary(results, output_dir="hepatitis_binding_results"):
+def _save_summary(results, output_dir="binding_results"):
     """Save summary of all predictions"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     summary_file = os.path.join(output_dir, f"binding_affinity_summary_{timestamp}.txt")
@@ -144,13 +144,13 @@ def _save_summary(results, output_dir="hepatitis_binding_results"):
     print(f"\nSummary saved to: {summary_file}")
 
 
-def predict_binding_affinity(receptor, ligand, system_type=None):
+def predict_binding_affinity(receptor_pdb_path, ligand_pdb_path, system_type=None):
     """
     Predict binding affinity between two protein structures using PRODIGY
     
     Args:
-        receptor (str): Path to receptor PDB file(mostly antigen)
-        ligand (str): Path to ligand PDB file(mostly protein)
+        receptor_pdb_path (str): Path to receptor PDB file(protein)
+        ligand (str): Path to ligand PDB file(protein)
         system_type (str): Operating system type ('windows_wsl', 'macos', 'linux', None)
                           If None, will auto-detect the system
     
@@ -168,7 +168,7 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
         - binding_affinity: Predicted binding affinity in kcal/mol
         - dissociation_constant: Predicted dissociation constant in M at 25°C
     """
-    print(f"Processing files:\n- {receptor}\n- {ligand}")
+    print(f"Processing files:\n- {receptor_pdb_path}\n- {ligand_pdb_path}")
     
     # Auto-detect system type if not provided
     if system_type is None:
@@ -189,14 +189,14 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
     
     # Combine PDB files
     combined_pdb = "complex.pdb"
-    _combine_pdb_files(receptor, ligand, combined_pdb)
+    _combine_pdb_files(receptor_pdb_path, ligand_pdb_path, combined_pdb)
     
     try:
         # Run PRODIGY prediction
         if system_type == 'windows_wsl':
             # Convert Windows paths to WSL paths
-            wsl_protein1 = subprocess.getoutput(f'wsl wslpath "{receptor}"')
-            wsl_protein2 = subprocess.getoutput(f'wsl wslpath "{ligand}"')
+            wsl_protein1 = subprocess.getoutput(f'wsl wslpath "{receptor_pdb_path}"')
+            wsl_protein2 = subprocess.getoutput(f'wsl wslpath "{ligand_pdb_path}"')
             
             # Create a temporary directory in WSL
             temp_dir = subprocess.getoutput('wsl mktemp -d')
@@ -301,7 +301,7 @@ def predict_binding_affinity(receptor, ligand, system_type=None):
 
 def main():
     # Paths
-    malaria_dir = "hepatitis_3d"
+    malaria_dir = "malaria_3d"
     antigen_path = "components/moremi-biokit/moremi_biokit/proteins/pdb_targets/6mpv.pdb"
     
     # Get all PDB files

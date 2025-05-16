@@ -16,8 +16,8 @@ Key Modules:
 
 # Import key components from within the proteins subpackage
 from .batch_protein_processor import BatchProteinProcessor
-from .protein_validator import (
-    ProteinValidator,
+from .protein_validator_v2 import (
+    ProteinValidatorV2,
     ProteinMetrics,
     MetricCategory,
     ProcessingResult
@@ -34,7 +34,7 @@ from . import reports
 
 __all__ = [
     # From protein_validator
-    "ProteinValidator",
+    "ProteinValidatorV2",
     "ProteinMetrics",
     "MetricCategory",
     "ProcessingResult",

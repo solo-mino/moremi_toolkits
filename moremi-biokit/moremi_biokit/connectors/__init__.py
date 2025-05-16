@@ -28,7 +28,8 @@ from .rcsb import (
     search_rcsb_by_sequence,
     search_rcsb_by_text,
     get_all_pdb_sequences_details,
-    get_pdb_chain_sequence_details,
+    fetch_sequence_details_by_pdb_chain_id,
+
     
    
 )
@@ -45,7 +46,8 @@ __all__ = [
     "search_rcsb_by_sequence",
     "search_rcsb_by_text",
     "get_all_pdb_sequences_details",
-    "get_pdb_chain_sequence_details",
+    "fetch_sequence_details_by_pdb_chain_id",
+
     
     "download_pdb_from_ncbi",
     
