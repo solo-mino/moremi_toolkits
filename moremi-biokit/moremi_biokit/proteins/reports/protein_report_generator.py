@@ -21,12 +21,13 @@ class ProteinReportPDF(FPDF):
         super().__init__('L')  # Landscape mode for wider tables
         self.set_auto_page_break(auto=True, margin=15)
         
-        # Set up fonts using relative paths
+        # Set up fonts using importlib.resources
         try:
-            assets_ref = pkg_resources.files('moremi_biokit.assets')
+            package_ref = pkg_resources.files('moremi_biokit')
+            assets_dir_ref = package_ref.joinpath('assets')
             
-            regular_font_ref = assets_ref.joinpath('fonts', 'SpaceGrotesk-Regular.ttf')
-            bold_font_ref = assets_ref.joinpath('fonts', 'SpaceGrotesk-Bold.ttf')
+            regular_font_ref = assets_dir_ref.joinpath('fonts', 'SpaceGrotesk-Regular.ttf')
+            bold_font_ref = assets_dir_ref.joinpath('fonts', 'SpaceGrotesk-Bold.ttf')
 
             with pkg_resources.as_file(regular_font_ref) as regular_font_path:
                 self.add_font('SpaceGrotesk', '', str(regular_font_path), uni=True)
@@ -36,7 +37,6 @@ class ProteinReportPDF(FPDF):
                 
         except FileNotFoundError:
             # Fallback or error handling if fonts are not found
-            # For now, we'll let FPDF handle it or raise an error if fonts are critical
             print("Warning: Custom fonts not found. Default fonts will be used.")
         
         # Initialize section counter
@@ -49,9 +49,11 @@ class ProteinReportPDF(FPDF):
         """Add header to pages"""
         # Add logo using importlib.resources
         try:
-            logo_ref = pkg_resources.files('moremi_biokit.assets').joinpath('minologo.png')
+            package_ref = pkg_resources.files('moremi_biokit')
+            logo_ref = package_ref.joinpath('assets', 'minologo.png')
+            
             with pkg_resources.as_file(logo_ref) as logo_path:
-                if logo_path.exists(): # Check if path from context manager is valid
+                if logo_path.exists():
                     self.image(str(logo_path), 10, 15, 15)
         except FileNotFoundError:
             print("Warning: Logo image 'minologo.png' not found in package assets.")
