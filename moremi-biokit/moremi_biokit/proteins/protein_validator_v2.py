@@ -16,6 +16,7 @@ import os
 import logging
 from datetime import datetime
 from moremi_biokit.connectors import rcsb
+import json # Added import for json
 
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
 
@@ -97,6 +98,35 @@ class ProteinMetrics:
             'total_score': self.total_score,
             'warnings': self.warnings
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ProteinMetrics':
+        """Reconstructs a ProteinMetrics object from a dictionary (e.g., from JSON)."""
+        metrics_data = data.get('metrics', {})
+        return cls(
+            sequence=data.get('sequence', ''),
+            antigen=data.get('antigen', 'N/A'),
+            antigen_id=data.get('antigen_id'),
+            molecular_weight=data.get('molecular_weight', 0.0),
+            molecular_formula=data.get('molecular_formula', 'N/A'),
+            antigen_pdb_chain_id=data.get('antigen_pdb_chain_id'),
+            
+            blast=metrics_data.get(MetricCategory.BLAST.value.lower(), metrics_data.get('blast', {})), # Handle old and new key naming
+            protparam=metrics_data.get(MetricCategory.PROTPARAM.value.lower(), metrics_data.get('protparam', {})),
+            immunogenicity=metrics_data.get(MetricCategory.IMMUNOGENICITY.value.lower(), metrics_data.get('immunogenicity', {})),
+            stability=metrics_data.get(MetricCategory.STABILITY.value.lower(), metrics_data.get('stability', {})),
+            aggregation=metrics_data.get(MetricCategory.AGGREGATION.value.lower(), metrics_data.get('aggregation', {})),
+            glycosylation=metrics_data.get(MetricCategory.GLYCOSYLATION.value.lower(), metrics_data.get('glycosylation', {})),
+            structure=metrics_data.get(MetricCategory.STRUCTURE.value.lower(), metrics_data.get('structure', {})),
+            binding_affinity=metrics_data.get(MetricCategory.BINDING_AFFINITY.value.lower().replace(" ", "_"), metrics_data.get('binding_affinity', {})),
+            epitope=metrics_data.get(MetricCategory.EPITOPE.value.lower(), metrics_data.get('epitope', {})),
+            conservancy=metrics_data.get(MetricCategory.CONSERVANCY.value.lower(), metrics_data.get('conservancy', {})),
+            developability=metrics_data.get(MetricCategory.DEVELOPABILITY.value.lower(), metrics_data.get('developability', {})),
+            
+            weighted_scores=data.get('weighted_scores', {}),
+            total_score=data.get('total_score', 0.0),
+            warnings=data.get('warnings', [])
+        )
 
 @dataclass
 class ProcessingResult:
@@ -1076,6 +1106,49 @@ class ProteinValidatorV2:
         logging.info(f"Successfully read {len(valid_sequences)} sequences from input_source.")
         return valid_sequences
 
+    def _append_to_realtime_csv(self, result: ProcessingResult, csv_path: str):
+        """Appends a single ProcessingResult to a CSV file, creating/writing headers if needed."""
+        record_to_append = {}
+        if result.success and result.metrics:
+            record_to_append = result.metrics.to_dict() # This flattens metrics inside
+            record_to_append['success'] = True
+            record_to_append['error'] = None
+             # Flatten nested metrics
+            if 'metrics' in record_to_append and isinstance(record_to_append['metrics'], dict):
+                for cat_key, cat_value in record_to_append['metrics'].items():
+                    if isinstance(cat_value, dict):
+                        for sub_key, sub_value in cat_value.items():
+                            record_to_append[f'{cat_key}_{sub_key}'] = sub_value
+                    else: # if metric category is not a dict (e.g. simple value or error string)
+                        record_to_append[cat_key] = cat_value
+                del record_to_append['metrics'] # remove original nested metrics
+
+        else: # Failed or no metrics
+            record_to_append = {
+                'sequence': result.sequence,
+                'success': False,
+                'error': result.error or "No metrics generated",
+                'antigen': "N/A", 'antigen_id': "N/A", 'antigen_pdb_chain_id': "N/A",
+                'molecular_weight': None, 'molecular_formula': "N/A", 'warnings': [],
+            }
+        
+        # Ensure warnings are stringified
+        if 'warnings' in record_to_append and isinstance(record_to_append['warnings'], list):
+            record_to_append['warnings'] = "; ".join(record_to_append['warnings'])
+
+        # Convert all list/dict values in record to string for CSV compatibility
+        for key, value in record_to_append.items():
+            if isinstance(value, (list, dict)):
+                record_to_append[key] = str(value)
+        
+        df_record = pd.DataFrame([record_to_append])
+        
+        file_exists = os.path.isfile(csv_path)
+        try:
+            df_record.to_csv(csv_path, mode='a', header=not file_exists, index=False)
+        except Exception as e:
+            logging.error(f"Error appending to realtime CSV {csv_path}: {e}")
+
     def get_successful_metrics(self, results: List[ProcessingResult]) -> List[ProteinMetrics]:
         """Extract only successful metrics from processing results"""
         # This method seems more general and could be a static method or utility if not using instance state
@@ -1098,18 +1171,25 @@ class ProteinValidatorV2:
         logging.info(f"✅ Successfully extracted metrics for {len(successful)} out of {len(results)} attempted proteins in the batch.")
         return successful
 
-    def validate_protein_list(self, input_source: Union[str, List[str], Path], output_csv_path: Optional[str] = None) -> List[ProteinMetrics]:
+    def validate_protein_list(self, 
+                              input_source: Union[str, List[str], Path], 
+                              output_csv_path: Optional[str] = None,
+                              realtime_csv_backup_path: Optional[str] = None, # New argument
+                              realtime_json_backup_path: Optional[str] = None # New argument
+                              ) -> List[ProteinMetrics]:
         """
         Validate a list of protein sequences, a single protein sequence string, or sequences from a file.
         Optionally saves all (successful and failed) processed results to a CSV file.
+        Also, incrementally saves all attempts to realtime_csv_backup_path and successful ProteinMetrics to realtime_json_backup_path.
         Antigen context for binding affinity must be set via `set_antigen_context` before calling this
         if binding affinity is among the metrics to be run.
         
         Args:
             input_source: A single protein sequence string, a list of protein sequences,
                           or a path (str or Path) to a file containing sequences.
-            output_csv_path (Optional[str]): If provided, path to save the validation results (including errors)
-                                             as a CSV file. Defaults to None (no CSV saved).
+            output_csv_path (Optional[str]): If provided, path to save the final validation results CSV.
+            realtime_csv_backup_path (Optional[str]): Path to save all validation attempts incrementally (CSV).
+            realtime_json_backup_path (Optional[str]): Path to save successful ProteinMetrics incrementally (JSON).
             
         Returns:
             List of ProteinMetrics objects for successfully validated proteins.
@@ -1118,29 +1198,59 @@ class ProteinValidatorV2:
 
         if not sequences_to_process:
             logging.warning("No sequences to validate from the provided input source.")
-            if output_csv_path: # Create an empty CSV if path is given but no sequences
+            if output_csv_path: 
                 logging.info(f"Writing empty CSV to {output_csv_path} as no sequences were processed.")
                 pd.DataFrame([]).to_csv(output_csv_path, index=False)
+            if realtime_csv_backup_path and not os.path.exists(realtime_csv_backup_path): # Touch empty CSV
+                 pd.DataFrame([]).to_csv(realtime_csv_backup_path, index=False)
+            if realtime_json_backup_path and not os.path.exists(realtime_json_backup_path): # Touch empty JSON list
+                with open(realtime_json_backup_path, 'w') as f:
+                    json.dump([], f)
             return []
 
-        # Check if binding affinity needs antigen context
         binding_affinity_to_run = self.metrics_to_run is None or MetricCategory.BINDING_AFFINITY in self.metrics_to_run
-        if binding_affinity_to_run and (not self.target_antigen_pdb_path or not self.target_antigen_sequence):
-            logging.warning("⚠️ Binding affinity is set to run, but antigen context (PDB path and sequence) is not set via set_antigen_context(). Binding affinity will likely fail or be skipped for all proteins.")
-            # We proceed, but process_protein will handle skipping/error for binding affinity per protein.
+        if binding_affinity_to_run and (not self.target_antigen_pdb_path): # Simplified check: PDB path is key
+            logging.warning("⚠️ Binding affinity is set to run, but antigen PDB path is not set via set_antigen_context(). Binding affinity will likely fail or be skipped.")
 
         print(f"\nStarting validation of {len(sequences_to_process)} proteins (from input_source)...")
         
         all_processing_results: List[ProcessingResult] = []
+        current_successful_metrics_list: List[ProteinMetrics] = []
+
+        # Ensure backup directories exist
+        if realtime_csv_backup_path:
+            os.makedirs(os.path.dirname(realtime_csv_backup_path), exist_ok=True)
+        if realtime_json_backup_path:
+            os.makedirs(os.path.dirname(realtime_json_backup_path), exist_ok=True)
         
         for idx, sequence in enumerate(sequences_to_process, 1):
             print(f"\nValidating protein {idx}/{len(sequences_to_process)}: {sequence[:20]}...")
             result = self.process_protein(sequence)
             all_processing_results.append(result)
-            # Logging of individual success/failure is done within process_protein
-            # and summarized after the loop.
 
-        successful_metrics = self.get_successful_metrics(all_processing_results)
+            # Real-time CSV backup of current result (attempt)
+            if realtime_csv_backup_path:
+                try:
+                    self._append_to_realtime_csv(result, realtime_csv_backup_path)
+                    logging.info(f"Appended to realtime CSV backup: {realtime_csv_backup_path} for protein {idx}")
+                except Exception as e_csv:
+                    logging.error(f"Failed to append to realtime CSV backup {realtime_csv_backup_path} for protein {idx}: {e_csv}")
+
+            # Real-time JSON backup of successful metrics list
+            if result.success and result.metrics:
+                current_successful_metrics_list.append(result.metrics)
+                if realtime_json_backup_path:
+                    try:
+                        # Convert list of ProteinMetrics objects to list of dicts
+                        dict_list_to_save = [pm.to_dict() for pm in current_successful_metrics_list]
+                        with open(realtime_json_backup_path, 'w') as f_json:
+                            json.dump(dict_list_to_save, f_json, indent=2)
+                        logging.info(f"Updated realtime JSON backup: {realtime_json_backup_path} with {len(current_successful_metrics_list)} successful proteins.")
+                    except Exception as e_json:
+                        logging.error(f"Failed to update realtime JSON backup {realtime_json_backup_path}: {e_json}")
+            
+        # After loop, successful_metrics can be derived from current_successful_metrics_list
+        successful_metrics = current_successful_metrics_list 
         failed_count = len(sequences_to_process) - len(successful_metrics)
 
         print(f"\nValidation via validate_protein_list complete:")
@@ -1151,7 +1261,7 @@ class ProteinValidatorV2:
         if output_csv_path:
             logging.info(f"Saving validation results to CSV: {output_csv_path}")
             # save_metrics_to_csv expects List[ProcessingResult] which includes errors
-            self.to_csv(all_processing_results, output_csv_path)
+            self.to_csv(all_processing_results, output_csv_path) # This is the final, complete CSV
         
         return successful_metrics
 

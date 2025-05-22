@@ -102,7 +102,7 @@ def predict_immunogenicity(sequence: Union[str, list], method: str = "NetMHCIIpa
         immunogenic_score = 0.0
     
     return {
-        "df": mhcii_res,
+        "df": mhcii_res.to_dict('records'),
         "immunogenic_score": immunogenic_score,
         "strong_binding": strong_binding,
         "moderate_binding": moderate_binding,

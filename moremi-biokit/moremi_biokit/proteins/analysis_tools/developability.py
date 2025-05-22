@@ -444,7 +444,7 @@ def predict_developability(
             "matches_found_count": int(num_matches_found)
         },
         "developability_score": round(developability_score_val, 4),
-        "performance_statistics": perf_stats,
+        # "performance_statistics": perf_stats,
         "report_string": "\n".join(report_lines)
     }
     

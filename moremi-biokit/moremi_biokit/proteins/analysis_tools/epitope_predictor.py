@@ -171,7 +171,7 @@ def predict_bcell_epitopes(
             # or sometimes a string message. iedb library behavior can vary.
             return {
                 "error": "IEDB query returned no data or an unexpected format.",
-                "iedb_raw_results_df": pd.DataFrame(), 
+                # "iedb_raw_results_df": pd.DataFrame(), 
                 "predicted_epitopes": [],
                 "epitope_sequences_list": [],
                 "epitope_count": 0,

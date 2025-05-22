@@ -26,6 +26,7 @@ from pathlib import Path
 import logging
 from tqdm import tqdm
 import importlib.util
+import json
 
 # Setup basic logging if not already configured by a higher-level script
 # This is a library, so ideally logging is configured by the application using it.
@@ -346,10 +347,57 @@ class ProteinRanker:
         # self._validate_scores(summary_to_return) # Placeholder if a validation func is needed
         return summary_to_return
 
-    def rank_proteins(self, metrics_list: Union[List[ProteinMetrics], ProteinMetrics]) -> pd.DataFrame:
-        if isinstance(metrics_list, ProteinMetrics):
-            metrics_list = [metrics_list]
-        if not metrics_list: return pd.DataFrame()
+    def rank_proteins(self, metrics_input: Union[List[ProteinMetrics], ProteinMetrics, str, Path]) -> pd.DataFrame:
+        """
+        Ranks proteins based on a list of ProteinMetrics objects or a path to a JSON file
+        containing a list of such objects (as dictionaries).
+
+        Args:
+            metrics_input: Can be:
+                - A list of ProteinMetrics objects.
+                - A single ProteinMetrics object.
+                - A string path to a JSON file containing a list of ProteinMetrics-compatible dictionaries.
+                - A Path object for the JSON file.
+
+        Returns:
+            A pandas DataFrame with ranked proteins.
+        """
+        metrics_list: List[ProteinMetrics]
+
+        if isinstance(metrics_input, (str, Path)):
+            json_path = Path(metrics_input)
+            logging.info(f"Attempting to load ProteinMetrics from JSON file: {json_path}")
+            if not json_path.is_file():
+                logging.error(f"JSON file not found: {json_path}")
+                return pd.DataFrame() # Return empty DataFrame if file not found
+            try:
+                with open(json_path, 'r') as f:
+                    metrics_dict_list = json.load(f)
+                if not isinstance(metrics_dict_list, list):
+                    logging.error(f"JSON file {json_path} does not contain a list of metrics.")
+                    return pd.DataFrame()
+                
+                metrics_list = [ProteinMetrics.from_dict(data) for data in metrics_dict_list]
+                logging.info(f"Successfully loaded {len(metrics_list)} ProteinMetrics objects from {json_path}")
+            except json.JSONDecodeError as e_json_dec:
+                logging.error(f"Error decoding JSON from {json_path}: {e_json_dec}")
+                return pd.DataFrame()
+            except Exception as e_load:
+                logging.error(f"Error loading or parsing ProteinMetrics from {json_path}: {e_load}", exc_info=True)
+                return pd.DataFrame()
+        elif isinstance(metrics_input, ProteinMetrics):
+            metrics_list = [metrics_input]
+        elif isinstance(metrics_input, list) and all(isinstance(m, ProteinMetrics) for m in metrics_input):
+            metrics_list = metrics_input
+        elif isinstance(metrics_input, list) and not metrics_input: # Empty list is fine
+             metrics_list = []
+        else:
+            logging.error(f"Invalid input type for metrics_input: {type(metrics_input)}. Expected List[ProteinMetrics], ProteinMetrics, str, or Path.")
+            return pd.DataFrame()
+
+        if not metrics_list:
+            logging.warning("No ProteinMetrics objects to rank.")
+            return pd.DataFrame()
 
         logging.info(f"🎯 Ranking {len(metrics_list)} proteins (Ranker V2 logic)...")
         all_protein_rows = []
@@ -449,7 +497,7 @@ class ProteinRanker:
                 logging.error(f"Error processing protein {protein_metric_obj.sequence[:20]} for ranking DataFrame: {e_rank_loop}", exc_info=True)
                 # Add a basic row with error if this protein fails catastrophically during row construction
                 all_protein_rows.append({
-                    'sequence': protein_metric_obj.sequence,
+                    'sequence': protein_metric_obj.sequence if hasattr(protein_metric_obj, 'sequence') else 'Unknown', # Defensive
                     'total_score': 0.0,
                     'warning_details': f"Ranking Error: {e_rank_loop}"
                 })
@@ -760,12 +808,18 @@ def rank_proteins_from_metrics(
     else:
         logging.info("No antigen parameters provided for validator.")
 
-    validator_overall_csv_path = main_output_dir / "validation_attempts_summary.csv"
-    # ProteinValidatorV2.validate_protein_list returns List[ProteinMetrics] of successful ones.
-    # It also internally calls its own `to_csv` with all ProcessingResult if output_csv_path is given.
+    validator_overall_csv_path = main_output_dir / "validation_attempts_summary.csv" # Final summary CSV
+    realtime_csv_backup_path = main_output_dir / "realtime_validation_attempts_backup.csv"
+    realtime_json_backup_path = main_output_dir / "realtime_successful_metrics_for_ranking.json"
+    
+    logging.info(f"Real-time CSV backup will be at: {realtime_csv_backup_path}")
+    logging.info(f"Real-time JSON backup will be at: {realtime_json_backup_path}")
+
     metrics_for_ranking = validator.validate_protein_list(
         input_source=protein_sequences_input,
-        output_csv_path=str(validator_overall_csv_path) 
+        output_csv_path=str(validator_overall_csv_path),
+        realtime_csv_backup_path=str(realtime_csv_backup_path),
+        realtime_json_backup_path=str(realtime_json_backup_path)
     )
 
     # Reporting on validation phase (summary based on validator's output CSV)
@@ -791,6 +845,11 @@ def rank_proteins_from_metrics(
 
     final_ranked_df = ranker_instance.rank_proteins(metrics_for_ranking)
 
+    # # Final summary report text file
+    # summary_txt_path = main_output_dir / f"overall_ranking_summary_{run_timestamp}.txt"
+    # with open(summary_txt_path, 'w') as f:
+    #     # ... (add summary report content here)
+    # logging.info(f"Ranking process finished. Summary: {summary_txt_path}")
     return final_ranked_df
 
 if __name__ == "__main__":
