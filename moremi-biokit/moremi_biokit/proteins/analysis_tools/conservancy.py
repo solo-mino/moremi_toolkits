@@ -214,8 +214,8 @@ def predict_conservancy(
     identity_threshold: float = 70.0,
     output_dir: Optional[str] = "conservancy_results",
     filename: str = 'epitope_conservancy_analysis',
-    save_csv: bool = True,
-    display_results: bool = True
+    save_csv: bool = False,
+
 ) -> Dict[str, Any]:
     """Runs epitope conservancy analysis using EpitopeConservancyAnalyzer.
 
@@ -231,7 +231,6 @@ def predict_conservancy(
                     Set to None to disable automatic directory creation/saving.
         filename: Base name for the optional output CSV file.
         save_csv: Whether to save the results DataFrame to a CSV file.
-        display_results: Whether to print the results DataFrame to the console.
 
     Returns:
         A dictionary containing:
@@ -301,19 +300,9 @@ def predict_conservancy(
             except IOError as e:
                 print(f"Warning: Could not save conservancy results to CSV: {e}")
 
-        # --- Optional Console Display --- 
-        if display_results:
-            print("\nEpitope Conservancy Analysis Results:")
-            try:
-                # Attempt to print using to_string for better formatting in console
-                print(results_df.to_string(index=False))
-            except: 
-                # Fallback if to_string fails (e.g., very wide columns)
-                print(results_df)
-            print(f"\nOverall Conservancy Score: {conservancy_score:.4f}")
             
         return {
-                "results": results_df,
+                "results": results_df.to_dict('records'),
                 "conservancy_score": round(conservancy_score, 4),
             }
 

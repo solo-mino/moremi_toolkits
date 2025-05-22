@@ -46,6 +46,7 @@ def analyze_with_protparam(sequence: str) -> Dict[str, Union[Dict[str, Any], str
         # Returns a tuple: (Helix, Turn, Sheet)
         secondary_structure_fraction = analyzed_seq.secondary_structure_fraction()
         aa_counts = analyzed_seq.count_amino_acids()
+        # aliphatic_index = analyzed_seq.aliphatic_index()
 
         # Standard classifications for hydrophobic and hydrophilic amino acids
         hydrophobic_aas = ['A', 'I', 'L', 'M', 'F', 'W', 'V', 'P']
@@ -78,7 +79,7 @@ def analyze_with_protparam(sequence: str) -> Dict[str, Union[Dict[str, Any], str
             "secondary_structure_fraction": secondary_structure_fraction # (helix, turn, sheet)
         }
         
-        return {"protein_params": protparam_results_dict}
+        return protparam_results_dict
 
     except ValueError as ve: # Specific error for invalid amino acids in ProteinAnalysis
         return {"error": f"Invalid character in sequence: {ve}"}

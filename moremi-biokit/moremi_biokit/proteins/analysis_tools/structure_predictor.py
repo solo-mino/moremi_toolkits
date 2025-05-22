@@ -121,7 +121,9 @@ def predict_structure(
             return {"error": f"SWISS-MODEL job {project_id} polling finished unexpectedly. Last status: {current_job_status}"}
 
         # 3. Retrieve model data if COMPLETED
+        # print(f"status_data: {status_data}")
         models = status_data.get("models", [])
+        # print(f"models: {models}")
         if not models:
             return {"error": f"SWISS-MODEL job {project_id} completed but no models found.", "details": status_data}
         
@@ -163,19 +165,18 @@ def predict_structure(
             "message": "Structure prediction successful.",
             "project_id": project_id,
             "gmqe": model_info.get("gmqe"),
-            # "model_details": {
-            #     "model_id": model_info.get("model_id"),
-            #     "qmean_disco_global": model_info.get("qmean_disco_global"),
-            #     "qmean_z_score": model_info.get("qmean4_z_score"), # Often qmean4_z_score is used
-            #     "seqid": model_info.get("seqid"),
-            #     "template": model_info.get("template_description"),
-            #     "method": model_info.get("method"),
-            #     "coverage": model_info.get("coverage"),
-            #     "ligands": model_info.get("ligands"),
-            #     "created_date": model_info.get("created_date")
-            #     # Add other relevant fields from model_info as needed
-            # },
+            "model_details": {
+                "model_id": model_info.get("model_id"),
+                "status": model_info.get("status"),
+                "qmean":model_info.get("qmean_global").get("avg_local_score"),
+                "coordinate_url": model_info.get("coordinates_url"),
+                "modelcif_url": model_info.get("modelcif_url"),
+            },
             "pdb_file_path": pdb_file_path,
+            "date_created": status_data.get("date_created"),
+            "project_title": status_data.get("project_title"),
+            "view_url": status_data.get("view_url"),
+            
             # TODO: DELETE FOR NOW BECAUSE OG LARGE PDB
             # "pdb_content": pdb_content # Be cautious with large PDB files in memory
         }

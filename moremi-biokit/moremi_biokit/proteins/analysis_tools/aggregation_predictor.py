@@ -129,7 +129,7 @@ def predict_aggregation(
             })
     
     aggregation_output: Dict[str, Any] = {
-        "overall_aggregation_propensity": propensity_label,
+        "aggregation_propensity": propensity_label,
         "aggregation_prone_regions": formatted_apr_list,
         "average_aggregation_score": round(average_score, 4)
     }

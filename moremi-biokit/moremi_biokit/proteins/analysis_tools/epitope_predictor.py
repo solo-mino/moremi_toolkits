@@ -16,7 +16,7 @@ try:
 except ImportError:
     iedb = None # Allows for type checking without runtime error if not installed
 
-IEDB_DEFAULT_METHOD = "Bepipred" # Bepipred-2.0 is often a good default
+IEDB_DEFAULT_METHOD = "Bepipred-2.0" # Bepipred-2.0 is often a good default
 VALID_IEDB_BCELL_METHODS: List[str] = [
     "Chou-Fasman", "Emini", "Karplus-Schulz", 
     "Kolaskar-Tongaonkar", "Parker", "Bepipred", "Bepipred-2.0"
@@ -204,7 +204,7 @@ def predict_bcell_epitopes(
         overall_avg_score = round(epitope_residue_scores.mean(), 3) if not epitope_residue_scores.empty else 0.0
 
         return {
-            "iedb_raw_results_df": raw_iedb_df.to_dict('records'), # Return as list of dicts for easier JSON serialization
+            # "iedb_raw_results_df": raw_iedb_df.to_dict('records'), # Return as list of dicts for easier JSON serialization
             "predicted_epitopes": extracted_peptides,
             "epitope_sequences_list": epitope_sequences,
             "epitope_count": len(extracted_peptides),

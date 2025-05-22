@@ -288,6 +288,14 @@ def predict_binding_affinity(receptor_pdb_path, ligand_pdb_path, system_type=Non
         
         return output_dict
             
+    except ValueError as e:
+        error_msg = str(e)
+        print(f"No contacts found for selection: {error_msg}")
+        return {"error": f"No contacts found for selection: {error_msg}"}
+    except subprocess.CalledProcessError as e:
+        error_msg = str(e)
+        print(f"Error during prediction: {error_msg}")
+        return {"error": f"Error during prediction: {error_msg}"}
     except Exception as e:
         error_msg = str(e)
         print(f"Error during prediction: {error_msg}")

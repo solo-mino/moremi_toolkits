@@ -67,12 +67,17 @@ def predict_immunogenicity(sequence: Union[str, list], method: str = "NetMHCIIpa
         print(f"An error occurred: {e}")
         return {"error_message": f"Error parsing response: {e}", "result": None}
     
+    
+    
+    # Calculate binding counts based on IC50 values
+    if mhcii_res is None:
+        return {"error": "No immunogenicity result, API response is empty"}
+    
     # Initialize counters
     strong_binding = 0
     moderate_binding = 0
     weak_binding = 0
     
-    # Calculate binding counts based on IC50 values
     if not mhcii_res.empty:
         for ic50 in mhcii_res['ic50']:
             try:
