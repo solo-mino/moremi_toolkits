@@ -3,6 +3,9 @@
 # notebooks
 # notebooks/
 
+moremi-biokit/tests/d_test/
+some.txt
+
 # linux pkl files
 *.pkl
 rcsb_pdb_sequence_db.txt

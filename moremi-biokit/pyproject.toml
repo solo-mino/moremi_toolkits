@@ -22,7 +22,6 @@ authors = [
 
 dependencies = [
     "admet_ai",
-    "prodigy-prot",
     "requests",
     "pandas",
     "rdkit",
@@ -32,12 +31,14 @@ dependencies = [
     "biopython",
     "iedb",
     "numpy",
+    "prodigy-prot",
     "matplotlib",
     "scikit-learn",
     "seaborn",
     "tqdm",
     "fpdf",
     "py3Dmol",
+    "pyfaidx",
 ]
 
 [project.optional-dependencies]

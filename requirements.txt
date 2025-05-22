@@ -1,10 +1,10 @@
 admet_ai
 torch==2.5.1
-prodigy-prot
 biopython
 iedb
 pandas
 numpy
+prodigy-prot
 matplotlib
 scikit-learn
 seaborn
@@ -13,7 +13,8 @@ fpdf
 requests
 rdkit
 py3Dmol
-openbabel
+pyfaidx
 
 
-# yes we'll do same for the smiles as well. but erm sorry i was taking about @batch_protein_processor.py . and also about making that part the ones that will not be part of the ranking 0 i don't is the ideal way. cause when the result comes out it going to be like that paricular one is 0 is something. so let make it so that those ones don't show at all in the result
+# use conda to install openbabel only as it is not available in pip
+# conda install -c conda-forge openbabel
