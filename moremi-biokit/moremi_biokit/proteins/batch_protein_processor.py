@@ -157,19 +157,19 @@ class BatchProteinProcessor:
                         if current_seq_lines: # Save previous sequence
                             sequences_data.append({
                                 'sequence': "".join(current_seq_lines),
-                                'name': current_name,
+                            'name': current_name,
                                 'antigen_ref': current_antigen_ref
-                            })
+                        })
                         current_seq_lines = [] # Reset for next sequence
-                        
+                    
                         header = line_content[1:].strip()
                         parts = header.split('[')
                         current_name = parts[0].strip() if parts[0].strip() else f"UnnamedSeq_Header{header_count}"
                         current_antigen_ref = parts[1].rstrip(']').strip() if len(parts) > 1 else None
-                    else: # sequence line
+                    else:  # sequence line
                         if all(c.upper() in "ACDEFGHIKLMNPQRSTVWYX*" for c in line_content):
                             current_seq_lines.append(line_content)
-                        else:
+                else:
                             logging.warning(
                                 f"Line in {self.input_file.name} (FASTA body for '{current_name}') "
                                 f"contains non-standard characters and was skipped: {line_content[:30]}..."
@@ -322,19 +322,18 @@ def main():
     antigen_group.add_argument("--antigen-pdb-download-path", type=str, default=None, help="Specific directory to store downloaded/generated antigen PDBs. If not set, ranker uses a subdirectory in its run output.")
 
     args = parser.parse_args()
-    
     try:
         processor = BatchProteinProcessor(
-            input_file=args.input_file, 
+            input_file=args.input_file,
             output_dir_base=args.output_dir_base,
             generate_pdf=args.pdf,
             generate_csv=args.csv,
             metrics_to_run_str=args.metrics_to_run,
-            target_antigen_sequence=args.target_antigen_sequence,
-            target_antigen_pdb_file_path=args.target_antigen_pdb_file_path,
-            target_antigen_pdb_chain_id=args.target_antigen_pdb_chain_id,
-            antigen_pdb_download_path=args.antigen_pdb_download_path
-        )
+        target_antigen_sequence=args.target_antigen_sequence,
+        target_antigen_pdb_file_path=args.target_antigen_pdb_file_path,
+        target_antigen_pdb_chain_id=args.target_antigen_pdb_chain_id,
+        antigen_pdb_download_path=args.antigen_pdb_download_path
+    )
         processor.process_batch()
     except FileNotFoundError:
         # Handled by __init__ logging, just exit gracefully for CLI

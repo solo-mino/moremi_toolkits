@@ -26,9 +26,6 @@ from pathlib import Path
 import logging
 from tqdm import tqdm
 import importlib.util
-import sys
-import traceback
-import json
 
 # Setup basic logging if not already configured by a higher-level script
 # This is a library, so ideally logging is configured by the application using it.
@@ -150,15 +147,22 @@ class ProteinRanker:
     def _parse_metric_value(self, value: Any, metric_name: str) -> Union[float, str, list, dict]:
         # (Assuming this helper is mostly correct from previous version, minor adjustments for robustness)
         numeric_metrics = [
-            'dissociation_constant', 'gmqe', 'n_glyc_sites_count',
-            'aggregation_regions', 'gravy', 'immunogenicity_score',
-            'conservancy_score', 'melting_temperature_celsius', 'epitope_score',
+            'dissociation_constant', 
+            'gmqe',
+            'n_glyc_sites_count',
+            'aggregation_regions',
+            'gravy',
+            'immunogenicity_score',
+            'conservancy_score',
+            'melting_temperature_celsius',
+            'epitope_score',
             'developability_score'
         ]
         if metric_name in numeric_metrics:
-            if isinstance(value, (float, int)): return float(value)
+            if isinstance(value, (float, int)):
+                return float(value)
             if isinstance(value, str):
-                try: 
+                try:
                     return float(value)
                 except (ValueError, TypeError):
                     logging.debug(f"Could not convert numeric metric {metric_name} value '{value}' to float, using 0.0")
@@ -171,8 +175,10 @@ class ProteinRanker:
         if isinstance(value, (list, dict)): return value
         if isinstance(value, (float, int)): return float(value)
         if isinstance(value, str):
-            try: return float(value)
-            except (ValueError, TypeError): return value
+            try: 
+                return float(value)
+            except (ValueError, TypeError): 
+                return value
             return str(value) if value is not None else ""
 
     def _normalize_score(self, value: Any, metric_name: str) -> float:
@@ -240,23 +246,37 @@ class ProteinRanker:
                 if cat_enum == MetricCategory.PROTPARAM and isinstance(metric_data, dict):
                     current_cat_sub_scores['gravy'] = self._normalize_score(metric_data.get('gravy'), 'gravy')
                     current_cat_sub_scores['solubility'] = self._normalize_score(metric_data.get('predicted_solubility'), 'solubility')
+                elif cat_enum == MetricCategory.STABILITY and isinstance(metric_data, dict):
+                    current_cat_sub_scores['melting_temperature_celsius'] = self._normalize_score(metric_data.get('melting_temperature_celsius'), 'melting_temperature_celsius')
                 elif cat_enum == MetricCategory.AGGREGATION and isinstance(metric_data, dict):
                     current_cat_sub_scores['aggregation_propensity'] = self._normalize_score(metric_data.get('aggregation_propensity'), 'aggregation_propensity')
                     num_regions = len(metric_data.get('aggregation_prone_regions', []))
                     current_cat_sub_scores['aggregation_regions'] = self._normalize_score(num_regions, 'aggregation_regions')
-                elif cat_enum == MetricCategory.BINDING_AFFINITY and isinstance(metric_data, dict):
-                    current_cat_sub_scores['dissociation_constant'] = self._normalize_score(metric_data.get('dissociation_constant'), 'dissociation_constant')
+                elif cat_enum == MetricCategory.GLYCOSYLATION and isinstance(metric_data, dict):
+                    n_glyc_data = metric_data.get('n_glycosylation')
+                    if isinstance(n_glyc_data, dict):
+                        n_glyc_count = n_glyc_data.get('count', 0)
+                    elif isinstance(n_glyc_data, list):
+                        n_glyc_count = len(n_glyc_data)
+                    elif isinstance(n_glyc_data, (int, float)):
+                        n_glyc_count = n_glyc_data
+                    else:
+                        n_glyc_count = 0
+                        if n_glyc_data is not None:
+                             logging.debug(f"Unexpected format for n_glycosylation data: {n_glyc_data}. Using count 0.")
+                    current_cat_sub_scores['n_glyc_sites_count'] = self._normalize_score(n_glyc_count, 'n_glyc_sites_count')
                 elif cat_enum == MetricCategory.STRUCTURE and isinstance(metric_data, dict):
                     current_cat_sub_scores['gmqe'] = self._normalize_score(metric_data.get('gmqe'), 'gmqe') # ProteinValidatorV2 uses 'gmqe' now
-                elif cat_enum == MetricCategory.GLYCOSYLATION and isinstance(metric_data, dict):
-                    current_cat_sub_scores['n_glyc_sites_count'] = self._normalize_score(metric_data.get('n_glyc_sites_count'), 'n_glyc_sites_count')
-                elif cat_enum == MetricCategory.STABILITY and isinstance(metric_data, dict):
-                    current_cat_sub_scores['melting_temperature_celsius'] = self._normalize_score(metric_data.get('melting_temperature_celsius'), 'melting_temperature_celsius')
-                elif cat_enum in [MetricCategory.IMMUNOGENICITY, MetricCategory.CONSERVANCY, MetricCategory.EPITOPE, MetricCategory.DEVELOPABILITY] and isinstance(metric_data, dict):
-                    score_key = f"{cat_attr}_score" # e.g. immunogenicity_score
-                    if score_key not in self.config.property_configs: score_key = cat_attr # try immunogenicity if specific not found
-                    if score_key not in self.config.property_configs: score_key = 'score' # fallback to generic 'score'
-                    current_cat_sub_scores['score'] = self._normalize_score(metric_data.get('score'), score_key)
+                elif cat_enum == MetricCategory.BINDING_AFFINITY and isinstance(metric_data, dict):
+                    current_cat_sub_scores['dissociation_constant'] = self._normalize_score(metric_data.get('dissociation_constant'), 'dissociation_constant')
+                elif cat_enum == MetricCategory.IMMUNOGENICITY and isinstance(metric_data, dict):
+                    current_cat_sub_scores['score'] = self._normalize_score(metric_data.get('immunogenic_score'), 'immunogenicity_score')
+                elif cat_enum == MetricCategory.CONSERVANCY and isinstance(metric_data, dict):
+                    current_cat_sub_scores['score'] = self._normalize_score(metric_data.get('conservancy_score'), 'conservancy_score')
+                elif cat_enum == MetricCategory.EPITOPE and isinstance(metric_data, dict):
+                    current_cat_sub_scores['score'] = self._normalize_score(metric_data.get('overall_average_score'), 'epitope_score')
+                elif cat_enum == MetricCategory.DEVELOPABILITY and isinstance(metric_data, dict):
+                    current_cat_sub_scores['score'] = self._normalize_score(metric_data.get('developability_score'), 'developability_score')
                 elif cat_enum == MetricCategory.BLAST:
                     metric_scores_detailed[cat_name] = {"status": "Collected, not directly scored for ranking"}
                     category_scores_final[cat_name] = 0.0
@@ -400,19 +420,17 @@ class ProteinRanker:
                         regions = metric_category_data.get('aggregation_prone_regions', [])
                         row['aggregation_regions_count'] = len(regions) if isinstance(regions, list) else 0
                     elif cat_enum == MetricCategory.GLYCOSYLATION:
-                        sites = metric_category_data.get('n_glycosylation_sites', [])
-                        row['n_glyc_sites_count'] = len(sites) if isinstance(sites, list) else 0
-                    elif cat_enum == MetricCategory.BINDING_AFFINITY:
-                        row['dissociation_constant_value'] = metric_category_data.get('dissociation_constant', np.nan)
+                        row['n_glyc_sites_count'] = metric_category_data.get('n_glycosylation', {}).get('count', 0)
                     elif cat_enum == MetricCategory.STRUCTURE:
                         row['gmqe_value'] = metric_category_data.get('gmqe', np.nan)
-                        # row['plddt_value'] = metric_category_data.get('plddt', np.nan)
+                    elif cat_enum == MetricCategory.BINDING_AFFINITY:
+                        row['dissociation_constant_value'] = metric_category_data.get('dissociation_constant', np.nan)
                     elif cat_enum == MetricCategory.EPITOPE:
                         row['epitope_score_value'] = metric_category_data.get('overall_epitope_score', metric_category_data.get('epitope_score', np.nan))
-                    elif cat_enum == MetricCategory.DEVELOPABILITY:
-                        row['developability_value'] = metric_category_data.get('developability_score', np.nan)
                     elif cat_enum == MetricCategory.CONSERVANCY:
                         row['conservancy_score_value'] = metric_category_data.get('overall_conservancy_score', np.nan)
+                    elif cat_enum == MetricCategory.DEVELOPABILITY:
+                        row['developability_value'] = metric_category_data.get('developability_score', np.nan)
                     
                     # For BLAST, the raw data is often a dictionary. We might choose to serialize it or pick key parts.
                     # For now, let's skip detailed BLAST raw values in the main ranking CSV to avoid excessive width,
@@ -438,6 +456,14 @@ class ProteinRanker:
         
         if not all_protein_rows: return pd.DataFrame()
         self.df = pd.DataFrame(all_protein_rows)
+        
+        # Drop BLAST related columns as they are not used for ranking
+        blast_columns_to_drop = ['blast_score', 'weighted_blast_score']
+        # Also, if any raw blast.* columns were inadvertently added, identify and drop them
+        # For now, assuming only the score columns are relevant based on current logic.
+        # If raw blast data columns (e.g. 'blast_some_value') are present, they would need to be added here.
+        self.df = self.df.drop(columns=[col for col in blast_columns_to_drop if col in self.df.columns], errors='ignore')
+        
         if 'total_score' in self.df.columns:
             self.df.sort_values('total_score', ascending=False, inplace=True)
             self.df.reset_index(drop=True, inplace=True)
@@ -473,9 +499,104 @@ class ProteinRanker:
         rankings_subdir = output_dir_path / 'rankings'
         rankings_subdir.mkdir(parents=True, exist_ok=True)
         df_csv = self.df.copy()
-        for col in df_csv.columns: # Basic serialization for CSV
+        
+        # Define the desired column order for ranking output
+        desired_ranking_columns = [
+            # Basic Identifiers
+            "sequence",
+            "antigen",
+            "antigen_pdb_chain_id",
+
+            # Physical Properties
+            "molecular_formula",
+            "molecular_weight",
+
+            # Scores (general)
+            "total_score",
+
+            # ProtParam-related
+            "protparam_score",
+            "weighted_protparam_score",
+            "norm_gravy_score",
+            "gravy_value",
+            "norm_solubility_score",
+            "solubility",
+
+            # Immunogenicity
+            "immunogenicity_score",
+            "weighted_immunogenicity_score",
+            "norm_score_score",
+            "immunogenicity_value",
+
+            # Stability / Melting Temperature
+            "stability_score",
+            "weighted_stability_score",
+            "norm_melting_temperature_celsius_score",
+            "melting_temperature",
+
+            # Aggregation
+            "aggregation_score",
+            "weighted_aggregation_score",
+            "norm_aggregation_propensity_score",
+            "aggregation_propensity",
+            "norm_aggregation_regions_score",
+            "aggregation_regions_count",
+
+            # Glycosylation
+            "glycosylation_score",
+            "weighted_glycosylation_score",
+            "norm_n_glyc_sites_count_score",
+            "n_glyc_sites_count",
+
+            # Structural Quality
+            "structure_score",
+            "weighted_structure_score",
+            "norm_gmqe_score",
+            "gmqe_value",
+            
+            # Binding Affinity
+            "binding_affinity_score",
+            "weighted_binding_affinity_score",
+            "dissociation_constant_value",
+            "norm_dissociation_constant_score",
+
+            # Epitope Score
+            "epitope_score",
+            "weighted_epitope_score",
+            "epitope_score_value",
+
+            # Conservancy
+            "conservancy_score",
+            "weighted_conservancy_score",
+            "conservancy_score_value",
+            
+            # Developability
+            "developability_score",
+            "weighted_developability_score",
+            "developability_value",
+
+            # Warnings and Missing Data
+            "warnings_count",
+            "warning_details",
+            "missing_metrics_count",
+            "missing_metrics_details"
+        ]
+        
+        # Create ordered columns list from those available in the dataframe
+        ordered_columns = [col for col in desired_ranking_columns if col in df_csv.columns]
+        
+        # Add any remaining columns that are not in the desired list
+        remaining_columns = [col for col in df_csv.columns if col not in ordered_columns]
+        ordered_columns.extend(remaining_columns)
+        
+        # Reorder dataframe columns
+        df_csv = df_csv[ordered_columns]
+        
+        # Serialize complex objects for CSV output
+        for col in df_csv.columns: 
             if df_csv[col].dtype == 'object':
                  df_csv[col] = df_csv[col].apply(lambda x: str(x) if isinstance(x, (dict, list)) else x)
+                 
         out_file = rankings_subdir / f'rankings_{timestamp}.csv'
         df_csv.to_csv(out_file, index=False)
         logging.info(f"Rankings saved to {out_file}")
@@ -670,26 +791,6 @@ def rank_proteins_from_metrics(
 
     final_ranked_df = ranker_instance.rank_proteins(metrics_for_ranking)
 
-    # # Final summary report text file
-    # summary_txt_path = main_output_dir / f"overall_ranking_summary_{run_timestamp}.txt"
-    # with open(summary_txt_path, 'w') as f:
-    #     f.write(f"--- Overall Ranking Process Summary ---\n")
-    #     f.write(f"Timestamp: {run_timestamp}\n")
-    #     f.write(f"Main Output Directory: {main_output_dir}\n")
-    #     f.write(f"Total Sequences Attempted Validation: {total_attempted_validation}\n")
-    #     f.write(f"Sequences Successfully Validated (passed to ranker): {len(metrics_for_ranking)}\n")
-    #     f.write(f"Sequences Failed/Skipped Validation: {failures_in_validation}\n")
-    #     f.write(f"Proteins Successfully Ranked: {len(final_ranked_df)}\n")
-    #     if not final_ranked_df.empty:
-    #         f.write(f"Top Ranked Protein (Score: {final_ranked_df.iloc[0]['total_score']:.3f}): {final_ranked_df.iloc[0]['sequence'][:30]}...\n")
-    #     f.write(f"\nKey Output Files (relative to Main Output Directory):\n")
-    #     f.write(f"- Validation Attempts CSV: {validator_overall_csv_path.name}\n")
-    #     f.write(f"- Rankings CSV: rankings/rankings_{run_timestamp}.csv (if generated)\n")
-    #     f.write(f"- Ranking PDF Report: rankings/ranking_report_{run_timestamp}.pdf (if generated)\n")
-    #     f.write(f"- This Summary: {summary_txt_path.name}\n")
-    #     f.write(f"- Detailed Log: {log_file.name}\n")
-
-    # logging.info(f"Ranking process finished. Summary: {summary_txt_path}")
     return final_ranked_df
 
 if __name__ == "__main__":

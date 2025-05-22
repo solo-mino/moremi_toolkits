@@ -15,7 +15,6 @@ from enum import Enum
 import os
 import logging
 from datetime import datetime
-from moremi_biokit import pdb_fetcher
 from moremi_biokit.connectors import rcsb
 
 from Bio.SeqUtils.ProtParam import ProteinAnalysis
@@ -34,11 +33,11 @@ class MetricCategory(Enum):
     STABILITY = "Stability"
     AGGREGATION = "Aggregation"
     GLYCOSYLATION = "Glycosylation"
-    BINDING_AFFINITY = "Binding Affinity"
     STRUCTURE = "Structure"
+    BINDING_AFFINITY = "Binding Affinity"
     EPITOPE = "Epitope"
-    DEVELOPABILITY = "Developability"
     CONSERVANCY = "Conservancy"
+    DEVELOPABILITY = "Developability"
     
     
 @dataclass
@@ -57,11 +56,11 @@ class ProteinMetrics:
     stability: Dict[str, Any]
     aggregation: Dict[str, Any]
     glycosylation: Dict[str, Any]
-    binding_affinity: Dict[str, Any]
     structure: Dict[str, Any]
+    binding_affinity: Dict[str, Any]
     epitope: Dict[str, Any]
-    developability: Dict[str, Any]
     conservancy: Dict[str, Any]
+    developability: Dict[str, Any]
     
     # These scores will be calculated by the ranker, not the validator
     weighted_scores: Dict[str, float] = field(default_factory=dict)
@@ -88,11 +87,11 @@ class ProteinMetrics:
                 'stability': self.stability,
                 'aggregation': self.aggregation,
                 'glycosylation': self.glycosylation,
-                'binding_affinity': self.binding_affinity,
                 'structure': self.structure,
+                'binding_affinity': self.binding_affinity,
                 'epitope': self.epitope,
-                'developability': self.developability,
-                'conservancy': self.conservancy
+                'conservancy': self.conservancy,
+                'developability': self.developability
             },
             'weighted_scores': self.weighted_scores,
             'total_score': self.total_score,
@@ -234,6 +233,7 @@ class ProteinValidatorV2:
     def set_antigen_context(self,
                             target_antigen_sequence: Optional[str] = None,
                             target_antigen_pdb_file_path: Optional[str] = None,
+                            target_pdb_id: Optional[str] = None, # New parameter for PDB ID
                             target_antigen_pdb_chain_id: Optional[str] = None, # e.g., "4R19_A"
                             antigen_pdb_download_dir: Optional[str] = None) -> bool:
         """
@@ -245,22 +245,26 @@ class ProteinValidatorV2:
             - Uses the provided local PDB file. PDB path is set.
             - Sequence is obtained if `target_antigen_sequence` is also given, or attempted via RCSB 
               if `target_antigen_pdb_chain_id` is provided (using inferred PDB ID from filename).
-        2.  **PDB ID and Chain (`target_antigen_pdb_chain_id`):**
+        2.  **PDB ID (`target_pdb_id`)**:
+            - Attempts to download the PDB file from RCSB using `target_pdb_id`.
+            - If download succeeds: PDB path is set.
+            - Sequence is obtained if `target_antigen_sequence` is provided. If `target_antigen_pdb_chain_id`
+              is also provided and its PDB ID part matches `target_pdb_id`, its chain part is used
+              with the downloaded PDB ID to fetch sequence from RCSB.
+        3.  **PDB ID and Chain (`target_antigen_pdb_chain_id`)**:
             - Parses PDB ID and chain from `target_antigen_pdb_chain_id`.
-            - Attempts to download the PDB file from RCSB using the PDB ID part.
-            - If download succeeds: PDB path is set. Sequence is obtained if `target_antigen_sequence` is given, 
-              or attempted via RCSB (using parsed PDB ID and chain).
-            - If download fails: Attempts to fetch sequence using `rcsb.fetch_sequence_details_by_pdb_chain_id` 
-              (which queries the microservice with the full PDBID_CHAIN string). 
-              If sequence is obtained, its 3D structure is predicted. If prediction succeeds, PDB path is set.
-        3.  **Antigen Sequence Only (`target_antigen_sequence`):**
-            - If only a sequence is provided (and no PDB path was determined above), its 3D structure is predicted. 
-              If prediction succeeds, PDB path is set.
+            - Attempts to fetch sequence using `rcsb.fetch_sequence_details_by_pdb_chain_id` (MoreMi microservice).
+            - If sequence is obtained, its 3D structure is predicted. If prediction succeeds, PDB path is set.
+        4.  **Antigen Sequence Only (`target_antigen_sequence`):**
+            - If only a sequence is provided (and no PDB path was determined above, or sequence was derived
+              from microservice but structure prediction failed), its 3D structure is predicted.
+            - If prediction succeeds, PDB path is set.
 
         Args:
             target_antigen_sequence (Optional[str]): Antigen amino acid sequence.
             target_antigen_pdb_file_path (Optional[str]): Path to a local PDB file for the antigen.
-            target_antigen_pdb_chain_id (Optional[str]): 'PDBID_CHAIN' (e.g., "4R19_A") for RCSB/microservice interaction.
+            target_pdb_id (Optional[str]): A PDB ID (e.g., "4R19") to download from RCSB.
+            target_antigen_pdb_chain_id (Optional[str]): 'PDBID_CHAIN' (e.g., "4R19_A") for MoreMi microservice interaction.
             antigen_pdb_download_dir (Optional[str]): Directory for downloaded/predicted antigen PDBs.
 
         Returns:
@@ -278,10 +282,11 @@ class ProteinValidatorV2:
         os.makedirs(self.antigen_pdb_download_path, exist_ok=True)
         logging.info(f"🔍 Antigen PDBs will be managed in: {self.antigen_pdb_download_path}")
 
+        # Initialize/reset antigen context attributes
         self.target_antigen_sequence = None
         self.target_antigen_pdb_path = None
-        self.target_antigen_pdb_id = None
-        self.target_antigen_chain_id = None # This is the specific chain if PDBID_CHAIN is used
+        self.target_antigen_pdb_id = None # This will store the PDB ID of the final chosen antigen structure
+        self.target_antigen_chain_id = None # This will store the chain if applicable
 
         # --- Priority 1: Local PDB File Path --- 
         if target_antigen_pdb_file_path:
@@ -289,6 +294,7 @@ class ProteinValidatorV2:
             if os.path.isfile(target_antigen_pdb_file_path):
                 self.target_antigen_pdb_path = target_antigen_pdb_file_path
                 pdb_file_basename = os.path.basename(target_antigen_pdb_file_path)
+                # Infer PDB ID from filename (e.g., "1abc.pdb" -> "1abc")
                 self.target_antigen_pdb_id = pdb_file_basename.split('.')[0].lower()
                 logging.info(f"✅ Successfully set antigen PDB path from local file: {self.target_antigen_pdb_path} (Inferred ID: {self.target_antigen_pdb_id})")
 
@@ -297,15 +303,19 @@ class ProteinValidatorV2:
                     logging.info(f"Using user-provided sequence for local PDB {self.target_antigen_pdb_id}.")
                 elif target_antigen_pdb_chain_id: 
                     try:
-                        _, chain_val = target_antigen_pdb_chain_id.split('_', 1)
-                        # self.target_antigen_chain_id = chain_val.upper() # Store if needed for consistency, though primary use is for PDBID_CHAIN input type
-                        logging.info(f"Attempting to fetch sequence for inferred PDB ID '{self.target_antigen_pdb_id}' and chain '{chain_val.upper()}' (RCSB)...")
-                        seq_details = rcsb.get_pdb_chain_sequence_details(self.target_antigen_pdb_id, chain_val.upper()) # Uses general RCSB fetch
-                        if seq_details and seq_details.get('sequence'):
-                            self.target_antigen_sequence = seq_details['sequence']
-                            logging.info(f"Fetched sequence for {self.target_antigen_pdb_id}_{chain_val.upper()} (len: {len(self.target_antigen_sequence)}).")
+                        # If chain_id is given, assume it corresponds to this local PDB
+                        pdb_id_from_chain_arg, chain_val = target_antigen_pdb_chain_id.split('_', 1)
+                        if pdb_id_from_chain_arg.lower() == self.target_antigen_pdb_id: # Ensure consistency
+                            self.target_antigen_chain_id = chain_val.upper()
+                            logging.info(f"Attempting to fetch sequence for local PDB ID '{self.target_antigen_pdb_id}' and chain '{self.target_antigen_chain_id}' (RCSB)...")
+                            seq_details = rcsb.get_pdb_chain_sequence_details(self.target_antigen_pdb_id, self.target_antigen_chain_id)
+                            if seq_details and seq_details.get('sequence'):
+                                self.target_antigen_sequence = seq_details['sequence']
+                                logging.info(f"Fetched sequence for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} (len: {len(self.target_antigen_sequence)}).")
+                            else:
+                                logging.warning(f"⚠️Could not fetch sequence for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} from RCSB for local PDB.")
                         else:
-                            logging.warning(f"⚠️Could not fetch sequence for {self.target_antigen_pdb_id}_{chain_val.upper()} from RCSB for local PDB.")
+                            logging.warning(f"⚠️ PDB ID from target_antigen_pdb_chain_id ('{pdb_id_from_chain_arg}') does not match inferred PDB ID from local file ('{self.target_antigen_pdb_id}'). Chain not used for sequence fetching.")
                     except Exception as e:
                         logging.warning(f"⚠️ Error attempting to fetch sequence for local PDB via RCSB using provided chain ID: {e}")
                 else:
@@ -313,77 +323,98 @@ class ProteinValidatorV2:
             else:
                 logging.warning(f"⚠️ Provided target_antigen_pdb_file_path '{target_antigen_pdb_file_path}' is not a valid file. Moving to next priority.")
 
-        # --- Priority 2: PDB ID and Chain (Download -> Microservice_Seq_Predict) --- 
-        if not self.target_antigen_pdb_path and target_antigen_pdb_chain_id: 
-            logging.info(f"Priority 2: 🔍 Using PDB_CHAIN_ID: {target_antigen_pdb_chain_id}")
+        # --- Priority 2: PDB ID for Download ---
+        if not self.target_antigen_pdb_path and target_pdb_id:
+            logging.info(f"Priority 2: 🔍 Using PDB ID '{target_pdb_id}' for download from RCSB.")
+            downloaded_pdb_path = self._materialize_antigen_pdb_file(target_pdb_id.lower(), self.antigen_pdb_download_path)
+            if downloaded_pdb_path:
+                self.target_antigen_pdb_path = downloaded_pdb_path
+                self.target_antigen_pdb_id = target_pdb_id.lower() # Store the PDB ID used for download
+                logging.info(f"✅ Successfully downloaded antigen PDB: {self.target_antigen_pdb_path} for ID {self.target_antigen_pdb_id}")
+
+                if target_antigen_sequence:
+                    self.target_antigen_sequence = target_antigen_sequence
+                    logging.info(f"Using user-provided sequence for downloaded PDB {self.target_antigen_pdb_id}.")
+                elif target_antigen_pdb_chain_id:
+                    try:
+                        pdb_id_from_chain_arg, chain_val = target_antigen_pdb_chain_id.split('_', 1)
+                        if pdb_id_from_chain_arg.lower() == self.target_antigen_pdb_id: # Chain must match the downloaded PDB ID
+                            self.target_antigen_chain_id = chain_val.upper()
+                            logging.info(f"Attempting to fetch sequence for downloaded PDB ID '{self.target_antigen_pdb_id}' and chain '{self.target_antigen_chain_id}' (RCSB)...")
+                            seq_details = rcsb.get_pdb_chain_sequence_details(self.target_antigen_pdb_id, self.target_antigen_chain_id)
+                            if seq_details and seq_details.get('sequence'):
+                                self.target_antigen_sequence = seq_details['sequence']
+                                logging.info(f"Fetched sequence (len: {len(self.target_antigen_sequence)}) for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} via RCSB.")
+                            else:
+                                logging.warning(f"⚠️ Could not fetch sequence for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} from RCSB after PDB download.")
+                        else:
+                            logging.warning(f"⚠️ PDB ID from target_antigen_pdb_chain_id ('{pdb_id_from_chain_arg}') does not match downloaded PDB ID ('{self.target_antigen_pdb_id}'). Chain not used for sequence fetching.")
+                    except Exception as e:
+                        logging.warning(f"⚠️ Error processing target_antigen_pdb_chain_id ('{target_antigen_pdb_chain_id}') with downloaded PDB: {e}")
+                else:
+                    logging.info(f"PDB {self.target_antigen_pdb_id} downloaded. Sequence not explicitly provided or fetched via chain ID.")
+            else:
+                logging.warning(f"⚠️ Failed to download PDB for ID '{target_pdb_id}'. Moving to next priority.")
+
+        # --- Priority 3: PDB ID and Chain (Microservice Sequence -> Predict Structure) ---
+        if not self.target_antigen_pdb_path and target_antigen_pdb_chain_id:
+            logging.info(f"Priority 3: 🔍 Using PDB_CHAIN_ID '{target_antigen_pdb_chain_id}' for MoreMi microservice sequence retrieval and prediction.")
             try:
-                pdb_id_part, chain_id_part = target_antigen_pdb_chain_id.split('_', 1)
-                if not pdb_id_part or not chain_id_part: raise ValueError("PDB ID or Chain part empty")
-                
-                parsed_pdb_id = pdb_id_part.lower()
-                self.target_antigen_chain_id = chain_id_part.upper() # Store the chain from PDBID_CHAIN input
-                self.target_antigen_pdb_id = parsed_pdb_id # Store the PDB ID part from input
+                # Ensure format is PDBID_CHAIN for the microservice
+                pdb_id_part_ms, chain_id_part_ms = target_antigen_pdb_chain_id.split('_', 1)
+                if not pdb_id_part_ms or not chain_id_part_ms:
+                    raise ValueError("PDB ID or Chain part empty in target_antigen_pdb_chain_id")
 
-                logging.info(f"🔍 Attempting to download PDB {parsed_pdb_id} from RCSB...")
-                downloaded_pdb_path = self._materialize_antigen_pdb_file(parsed_pdb_id, self.antigen_pdb_download_path)
+                logging.info(f"Attempting to fetch sequence via MoreMi microservice for '{target_antigen_pdb_chain_id}'.")
+                seq_details_microservice = rcsb.fetch_sequence_details_by_pdb_chain_id(target_antigen_pdb_chain_id) 
 
-                if downloaded_pdb_path:
-                    self.target_antigen_pdb_path = downloaded_pdb_path
-                    # self.target_antigen_pdb_id is already set from parsed_pdb_id
-                    logging.info(f"✅ Successfully downloaded antigen PDB: {self.target_antigen_pdb_path}")
-                    if target_antigen_sequence:
-                        self.target_antigen_sequence = target_antigen_sequence
-                        logging.info(f"Using user-provided sequence for downloaded PDB {parsed_pdb_id}_{self.target_antigen_chain_id}.")
+                if seq_details_microservice and seq_details_microservice.get('sequence'):
+                    self.target_antigen_sequence = seq_details_microservice['sequence']
+                    # Use PDB ID and Chain from microservice response for consistency
+                    self.target_antigen_pdb_id = seq_details_microservice.get('pdb_id', pdb_id_part_ms.lower())
+                    self.target_antigen_chain_id = seq_details_microservice.get('chain_id', chain_id_part_ms.upper())
+                    logging.info(f"🔍 Fetched sequence (len: {len(self.target_antigen_sequence)}) for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} via microservice. Now predicting structure.")
+                    
+                    predicted_pdb_path = self._predict_antigen_structure(self.target_antigen_sequence, self.antigen_pdb_download_path)
+                    if predicted_pdb_path:
+                        self.target_antigen_pdb_path = predicted_pdb_path
+                        # Update PDB ID for this predicted structure to reflect its origin
+                        self.target_antigen_pdb_id = f"predicted_msvc_{self.target_antigen_pdb_id}_{self.target_antigen_chain_id}"
+                        # Chain ID is already set from microservice if applicable
+                        logging.info(f"✅ Successfully predicted structure from microservice sequence: {self.target_antigen_pdb_path}")
                     else:
-                        logging.info(f"Attempting to fetch sequence for {parsed_pdb_id}_{self.target_antigen_chain_id} from RCSB (standard fetch)...")
-                        seq_details = rcsb.get_pdb_chain_sequence_details(parsed_pdb_id, self.target_antigen_chain_id) # General RCSB fetch
-                        if seq_details and seq_details.get('sequence'):
-                            self.target_antigen_sequence = seq_details['sequence']
-                            logging.info(f"Fetched sequence (len: {len(self.target_antigen_sequence)}) for {parsed_pdb_id}_{self.target_antigen_chain_id} via RCSB.")
-                        else:
-                            logging.warning(f"⚠️ Could not fetch sequence for {parsed_pdb_id}_{self.target_antigen_chain_id} from RCSB after PDB download.")
-                else: # PDB download failed, try microservice for sequence then predict
-                    logging.warning(f"⚠️ Failed to download PDB {parsed_pdb_id}. Attempting to fetch sequence via microservice ({target_antigen_pdb_chain_id}) for prediction.")
-                    # Use the original target_antigen_pdb_chain_id for the microservice call as it expects "PDBID_CHAIN"
-                    seq_details_microservice = rcsb.fetch_sequence_details_by_pdb_chain_id(target_antigen_pdb_chain_id) 
-                    if seq_details_microservice and seq_details_microservice.get('sequence'):
-                        self.target_antigen_sequence = seq_details_microservice['sequence']
-                        # Update PDB ID and Chain from microservice if they differ, though usually they align with input for this func
-                        self.target_antigen_pdb_id = seq_details_microservice.get('pdb_id', parsed_pdb_id) 
-                        self.target_antigen_chain_id = seq_details_microservice.get('chain_id', self.target_antigen_chain_id)
-                        logging.info(f"🔍 Fetched sequence (len: {len(self.target_antigen_sequence)}) for {target_antigen_pdb_chain_id} via microservice. Now predicting structure.")
-                        
-                        predicted_pdb_path = self._predict_antigen_structure(self.target_antigen_sequence, self.antigen_pdb_download_path)
-                        if predicted_pdb_path:
-                            self.target_antigen_pdb_path = predicted_pdb_path
-                            # PDB ID for predicted structure should reflect its origin
-                            self.target_antigen_pdb_id = f"predicted_msvc_{self.target_antigen_pdb_id}_{self.target_antigen_chain_id}"
-                            logging.info(f"✅ Successfully predicted structure from microservice sequence: {self.target_antigen_pdb_path}")
-                        else:
-                            logging.warning(f"⚠️ Failed to predict structure for sequence from microservice ({target_antigen_pdb_chain_id}). PDB path remains unset.")
-                            self.target_antigen_sequence = None # Sequence without structure is not useful here if prediction failed
-                    else:
-                        logging.warning(f"⚠️ Could not fetch sequence from microservice for {target_antigen_pdb_chain_id}. Cannot predict structure.")
+                        logging.warning(f"⚠️ Failed to predict structure for sequence from microservice ({target_antigen_pdb_chain_id}). PDB path remains unset. Sequence (len: {len(self.target_antigen_sequence)}) is available if needed for sequence-only prediction.")
+                        # Keep self.target_antigen_sequence, it might be used in Priority 4
+                else:
+                    logging.warning(f"⚠️ Could not fetch sequence from MoreMi microservice for '{target_antigen_pdb_chain_id}'. Cannot predict structure this way. Moving to next priority.")
             except ValueError as e:
-                logging.error(f"❌ Invalid format for target_antigen_pdb_chain_id '{target_antigen_pdb_chain_id}': {e}. Moving to next priority.")
+                logging.error(f"❌ Invalid format for target_antigen_pdb_chain_id '{target_antigen_pdb_chain_id}' for microservice: {e}. Moving to next priority.")
             except Exception as e:
-                logging.error(f"❌ Error processing PDB_CHAIN_ID '{target_antigen_pdb_chain_id}': {e}. Moving to next priority.")
+                logging.error(f"❌ Error processing PDB_CHAIN_ID '{target_antigen_pdb_chain_id}' with microservice: {e}. Moving to next priority.")
 
-        # --- Priority 3: Antigen Sequence Only (Predict Structure) --- 
-        if not self.target_antigen_pdb_path and target_antigen_sequence:
-            logging.info(f"Priority 3: 🔍 Using provided antigen sequence (len: {len(target_antigen_sequence)}) for structure prediction as no PDB path resolved yet.")
-            # Ensure self.target_antigen_sequence is set if it wasn't already from a failed P2 attempt that still had the sequence input.
-            if not self.target_antigen_sequence: self.target_antigen_sequence = target_antigen_sequence
-            
-            predicted_pdb_path = self._predict_antigen_structure(self.target_antigen_sequence, self.antigen_pdb_download_path)
+        # --- Priority 4: Antigen Sequence Only (Predict Structure) ---
+        # This will also catch sequences derived from Priority 3 if structure prediction failed there but sequence was obtained
+        if not self.target_antigen_pdb_path and (target_antigen_sequence or self.target_antigen_sequence):
+            # Prioritize explicitly passed target_antigen_sequence if both exist
+            current_sequence_to_predict = target_antigen_sequence if target_antigen_sequence else self.target_antigen_sequence
+
+            logging.info(f"Priority 4: 🔍 Using provided/derived antigen sequence (len: {len(current_sequence_to_predict)}) for structure prediction as no PDB path resolved yet.")
+            # Ensure self.target_antigen_sequence is set with the sequence we are about to use
+            if not self.target_antigen_sequence: self.target_antigen_sequence = current_sequence_to_predict
+
+            predicted_pdb_path = self._predict_antigen_structure(current_sequence_to_predict, self.antigen_pdb_download_path)
             if predicted_pdb_path:
                 self.target_antigen_pdb_path = predicted_pdb_path
-                self.target_antigen_pdb_id = "predicted_user_sequence"
-                self.target_antigen_chain_id = None 
-                logging.info(f"✅ Successfully predicted structure from user-provided antigen sequence: {self.target_antigen_pdb_path}")
+                self.target_antigen_pdb_id = "predicted_user_sequence" # Or a more specific ID if derived from microservice earlier
+                if hasattr(self, 'target_antigen_chain_id') and self.target_antigen_chain_id and "predicted_msvc" in (self.target_antigen_pdb_id or ""):
+                    # If chain and msvc origin were set, keep them, but PDB ID reflects it's now a prediction
+                    pass # Chain ID is already set
+                else: # Pure sequence input
+                    self.target_antigen_chain_id = None 
+                logging.info(f"✅ Successfully predicted structure from user-provided/derived antigen sequence: {self.target_antigen_pdb_path}")
             else:
-                logging.warning(f"⚠️ Failed to predict structure for the user-provided antigen sequence. PDB path remains unset.")
-                self.target_antigen_sequence = None 
+                logging.warning(f"⚠️ Failed to predict structure for the user-provided/derived antigen sequence. PDB path remains unset.")
+                self.target_antigen_sequence = None # If prediction fails, sequence alone without structure might not be useful for binding.
         
         # --- Final Outcome --- 
         if self.target_antigen_pdb_path:
@@ -441,9 +472,17 @@ class ProteinValidatorV2:
                 antigen_id=self.target_antigen_pdb_id or "Unknown",
                 molecular_weight=molecular_weight,
                 molecular_formula=molecular_formula,
-                blast={}, protparam={}, immunogenicity={}, stability={}, aggregation={},
-                glycosylation={}, binding_affinity={}, structure={}, epitope={},
-                developability={}, conservancy={},
+                blast={},
+                protparam={},
+                immunogenicity={},
+                stability={},
+                aggregation={},
+                glycosylation={},
+                binding_affinity={},
+                structure={},
+                epitope={},
+                developability={},
+                conservancy={},
                 warnings=[]
             )
             
@@ -485,7 +524,7 @@ class ProteinValidatorV2:
                 print("├── 🔍 Analyzing ProtParam properties...")
                 try:
                     protparam_result = analyze_with_protparam(sequence)
-                    protein_metrics.protparam = protparam_result.get('protein_params', {"error": "No ProtParam result"})
+                    protein_metrics.protparam = protparam_result if protparam_result else {"error": "No ProtParam result"}
                     logging.info(f"│   └── ✓ ProtParam complete")
                     print("│   └── ✓ ProtParam complete")
                 except Exception as e:
@@ -625,7 +664,7 @@ class ProteinValidatorV2:
                 logging.info(f"├── 🔗 Calculating binding affinity...")
                 print("├── 🔗 Calculating binding affinity...")
                 # Check if antigen context and antibody structure are available
-                if self.target_antigen_pdb_path and self.target_antigen_sequence and antibody_pdb_path:
+                if (self.target_antigen_pdb_path and antibody_pdb_path) or (self.target_antigen_sequence and antibody_pdb_path):
                     try:
                         # Note: predict_binding_affinity expects PDB paths.
                         # self.target_antigen_pdb_path is set by set_antigen_context
@@ -652,8 +691,10 @@ class ProteinValidatorV2:
                         protein_metrics.binding_affinity = {"error": error_msg}
                 else:
                     missing_items = []
+                    skip_msg = "Skipped by user configuration."
                     if not self.target_antigen_pdb_path: missing_items.append("antigen PDB structure (context not set or failed)")
-                    if not self.target_antigen_sequence: missing_items.append("antigen sequence (context not set or failed)")
+                    if not self.target_antigen_sequence: 
+                        missing_items.append("antigen sequence (context not set or failed)")
                     if not antibody_pdb_path:
                         if protein_metrics.structure.get("status") == skip_msg:
                             missing_items.append("antibody PDB structure (skipped by user)")
@@ -708,7 +749,7 @@ class ProteinValidatorV2:
                         self._add_warning(protein_metrics, MetricCategory.CONSERVANCY.value, warn_skip_msg)
                         raise ValueError(warn_skip_msg) # This will be caught and logged as error for conservancy
 
-                    conservancy_result = predict_conservancy(sequence, epitopes_for_conservancy, output_dir = None, save_csv = False, display_results = False)
+                    conservancy_result = predict_conservancy(sequence, epitopes_for_conservancy, output_dir = None, save_csv = False)
                     protein_metrics.conservancy = conservancy_result if conservancy_result else {"error": "No conservancy result"}
                     logging.info(f"│   └── ✓ Conservancy analysis complete")
                     print("│   └── ✓ Conservancy analysis complete")
@@ -951,6 +992,90 @@ class ProteinValidatorV2:
                     f.write("-" * 50 + "")
         logging.info(f"Batch summary saved to {summary_file}")
 
+    def _read_sequences_from_input(self, input_source: Union[str, List[str], Path]) -> List[str]:
+        """
+        Reads protein sequences from various input types.
+
+        Args:
+            input_source: Can be a single sequence string, a list of sequence strings,
+                          or a file path (string or Path object) to a file containing sequences.
+                          The file can be plain text (one sequence per line) or FASTA format.
+
+        Returns:
+            A list of protein sequence strings.
+        """
+        sequences: List[str] = []
+        input_path: Optional[Path] = None
+
+        if isinstance(input_source, list):
+            if all(isinstance(item, str) for item in input_source):
+                sequences = [item for item in input_source if item]  # Filter out empty strings
+            else:
+                logging.warning("Input list contains non-string items. Only non-empty string items will be treated as sequences.")
+                sequences = [str(item) for item in input_source if isinstance(item, str) and item]
+        elif isinstance(input_source, str):
+            # Try to interpret as a file path first
+            potential_path = Path(input_source)
+            if potential_path.is_file():
+                input_path = potential_path
+            elif input_source:  # Not a file, treat as a single sequence string
+                logging.info("Input string is not a file, treating as a single sequence.")
+                sequences = [input_source]
+            else: # Empty string
+                logging.warning("Input string is empty and not a file path.")
+        elif isinstance(input_source, Path):
+            if input_source.is_file():
+                input_path = input_source
+            else:
+                logging.warning(f"Input Path object {input_source} is not a valid file.")
+        else:
+            logging.warning(f"Unsupported input type for sequences: {type(input_source)}. Expected string, list of strings, or file path.")
+
+        if input_path:
+            logging.info(f"📖 Reading sequences from file: {input_path}")
+            try:
+                with open(input_path, 'r') as f:
+                    lines_from_file = [line.strip() for line in f if line.strip()] # Read all non-empty stripped lines
+                
+                if not lines_from_file:
+                    logging.warning(f"No non-empty lines found in file {input_path}.")
+                    return []
+
+                # Determine if the file is likely FASTA by checking for '>' in any relevant line
+                is_fasta = any(line.startswith(">") for line in lines_from_file)
+
+                if is_fasta:
+                    logging.debug(f"Detected FASTA format for {input_path}")
+                    current_sequence_lines: List[str] = []
+                    for line in lines_from_file:
+                        if line.startswith(">"):
+                            if current_sequence_lines:  # Save previous sequence if any
+                                sequences.append("".join(current_sequence_lines))
+                                current_sequence_lines = []
+                            # FASTA header itself is ignored for sequence collection
+                        else:  # Sequence line, remove internal spaces/newlines just in case
+                            current_sequence_lines.append(line.replace(" ", "").replace("\\n", ""))
+                    if current_sequence_lines:  # Add the last sequence in the file
+                        sequences.append("".join(current_sequence_lines))
+                else:  # Plain text, one sequence per line (after initial strip)
+                    logging.debug(f"Detected plain text format (one sequence per line) for {input_path}")
+                    # Each line that is not a comment (already stripped) and not empty is a sequence
+                    sequences.extend([line for line in lines_from_file if not line.startswith("#") and not line.startswith("//")])
+                
+                if not sequences:
+                    logging.warning(f"No valid sequences extracted from file {input_path} (format detected: {'FASTA' if is_fasta else 'plain text'}).")
+            except Exception as e:
+                logging.error(f"Error reading sequence file {input_path}: {e}", exc_info=True)
+                return [] # Return empty list on error
+
+        # Final validation of sequences (e.g., remove very short or obviously invalid characters if needed)
+        valid_sequences = [seq for seq in sequences if seq and len(seq) >= 3] # Example: ensure sequences are not empty and have min length
+        if len(valid_sequences) != len(sequences):
+            logging.debug(f"Removed {len(sequences) - len(valid_sequences)} empty or very short sequences from input.")
+        
+        logging.info(f"Successfully read {len(valid_sequences)} sequences from input_source.")
+        return valid_sequences
+
     def get_successful_metrics(self, results: List[ProcessingResult]) -> List[ProteinMetrics]:
         """Extract only successful metrics from processing results"""
         # This method seems more general and could be a static method or utility if not using instance state
@@ -972,82 +1097,6 @@ class ProteinValidatorV2:
         
         logging.info(f"✅ Successfully extracted metrics for {len(successful)} out of {len(results)} attempted proteins in the batch.")
         return successful
-    
-    def _read_sequences_from_input(self, input_source: Union[str, List[str], Path]) -> List[str]:
-        """
-        Reads protein sequences from various input types.
-
-        Args:
-            input_source: Can be a single sequence string, a list of sequence strings,
-                          or a file path (string or Path object) to a file containing sequences.
-                          The file can be plain text (one sequence per line) or FASTA format.
-
-        Returns:
-            A list of protein sequence strings.
-        """
-        sequences: List[str] = []
-        
-        if isinstance(input_source, list):
-            # Assume it's a list of strings
-            if all(isinstance(item, str) for item in input_source):
-                sequences = [item for item in input_source if item] # Filter out empty strings
-            else:
-                logging.warning("Input list contains non-string items. Only non-empty string items will be treated as sequences.")
-                sequences = [str(item) for item in input_source if isinstance(item, str) and item]
-        elif isinstance(input_source, str) or isinstance(input_source, Path):
-            input_path = Path(input_source) # Ensure it's a Path object
-            if input_path.is_file():
-                logging.info(f"📖 Reading sequences from file: {input_path}")
-                try:
-                    with open(input_path, 'r') as f:
-                        lines = [line.strip() for line in f if line.strip() and not line.strip().startswith("#") and not line.strip().startswith("//")]
-                    
-                    if not lines:
-                        logging.warning(f"No non-empty, non-comment lines found in file {input_path}.")
-                        return []
-
-                    # Determine if the file is likely FASTA by checking for '>' in any relevant line
-                    is_fasta = any(line.startswith(">") for line in lines)
-
-                    if is_fasta:
-                        logging.debug(f"Detected FASTA format for {input_path}")
-                        current_sequence_lines = []
-                        for line in lines:
-                            if line.startswith(">"):
-                                if current_sequence_lines: # Save previous sequence if any
-                                    sequences.append("".join(current_sequence_lines))
-                                    current_sequence_lines = []
-                                # FASTA header itself is ignored for sequence collection
-                            else: # Sequence line
-                                current_sequence_lines.append(line)
-                        if current_sequence_lines: # Add the last sequence in the file
-                            sequences.append("".join(current_sequence_lines))
-                    else: # Plain text, one sequence per line
-                        logging.debug(f"Detected plain text format (one sequence per line) for {input_path}")
-                        # Each line that is not a comment and not empty is a sequence
-                        sequences.extend(lines) 
-                    
-                    if not sequences:
-                        logging.warning(f"No valid sequences extracted from file {input_path} (format detected: {'FASTA' if is_fasta else 'plain text'}).")
-                except Exception as e:
-                    logging.error(f"Error reading sequence file {input_path}: {e}", exc_info=True)
-                    return [] # Return empty list on error
-            elif isinstance(input_source, str): # If it's a string but not a file, treat as single sequence
-                logging.info("Input string is not a file, treating as a single sequence.")
-                if input_source: # Ensure non-empty
-                    sequences = [input_source]
-            else:
-                logging.warning(f"Input path {input_source} is not a valid file. Treating as empty sequence list.")
-        else:
-            logging.warning(f"Unsupported input type for sequences: {type(input_source)}. Expected string, list of strings, or file path.")
-
-        # Final validation of sequences (e.g., remove very short or obviously invalid characters if needed)
-        # For now, we rely on process_protein for detailed validation.
-        valid_sequences = [seq for seq in sequences if seq] # Remove empty strings that might have crept in
-        if len(valid_sequences) != len(sequences):
-            logging.debug(f"Removed {len(sequences) - len(valid_sequences)} empty sequences from input.")
-
-        return valid_sequences
 
     def validate_protein_list(self, input_source: Union[str, List[str], Path], output_csv_path: Optional[str] = None) -> List[ProteinMetrics]:
         """
@@ -1118,39 +1167,230 @@ class ProteinValidatorV2:
         return dict_list
 
     def to_csv(self, results: List[ProcessingResult], output_csv_path: str):
-        """Saves ProteinMetrics from successful ProcessingResult objects to a CSV file."""
+        """Saves ProteinMetrics from successful ProcessingResult objects to a CSV file.
+        If self.metrics_to_run is specified, only columns related to those metrics
+        (and essential non-metric columns) will be included in the CSV.
+        """
         if not results:
             logging.warning("No results provided to save_metrics_to_csv.")
             print("Warning: No results to save to CSV.")
             return
 
-        metrics_dict_list = self.to_dict_list(results)
-        if not metrics_dict_list:
-            logging.warning("No successful metrics found to save to CSV.")
-            print("Warning: No successful metrics to save to CSV.")
+        # Convert successful results to a list of dictionaries
+        # Note: to_dict_list only includes successful metrics. We need ALL results for the CSV.
+        all_records = []
+        for result in results:
+            if result.success and result.metrics:
+                record = result.metrics.to_dict()
+                record['success'] = True
+                record['error'] = None
+            else: # Failed or no metrics
+                record = {
+                    'sequence': result.sequence,
+                    'success': False,
+                    'error': result.error or "No metrics generated",
+                    # Initialize other core fields as None/empty for consistent structure
+                    'antigen': "N/A",
+                    'antigen_id': "N/A",
+                    'antigen_pdb_chain_id': "N/A",
+                    'molecular_weight': None,
+                    'molecular_formula': "N/A",
+                    'warnings': [],
+                    'metrics': {} # Empty metrics dict for failed ones
+                }
+            all_records.append(record)
+
+        if not all_records:
+            logging.warning("No records (successful or failed) to save to CSV.")
+            print("Warning: No records to save to CSV.")
             return
 
         try:
-            df = pd.DataFrame(metrics_dict_list)
-            # Basic flattening for the 'metrics' nested dict
-            if not df.empty and 'metrics' in df.columns and isinstance(df['metrics'].iloc[0], dict):
-                try:
-                    metrics_expanded = pd.json_normalize(df['metrics'], sep='_')
-                    df = df.drop(columns=['metrics'])
-                    df = pd.concat([df, metrics_expanded], axis=1)
-                except Exception as e: # Handle cases where json_normalize might fail or column is not as expected
-                    logging.error(f"Could not fully flatten 'metrics' column for CSV: {e}. Proceeding with unflattened parts if any.")
+            df = pd.DataFrame(all_records)
+
+            # Flatten the 'metrics' nested dict if it exists and is not empty
+            if 'metrics' in df.columns:
+                # Normalize only rows where 'metrics' is a dict
+                valid_metrics_mask = df['metrics'].apply(lambda x: isinstance(x, dict))
+                if valid_metrics_mask.any():
+                    metrics_expanded = pd.json_normalize(df.loc[valid_metrics_mask, 'metrics'], sep='_')
+                    # df might not have 'metrics' if all failed very early
+                    if 'metrics' in df.columns:
+                         df = df.drop(columns=['metrics'])
+                    df = pd.concat([df, metrics_expanded], axis=1) # Concat might add NaNs for rows without metrics
+
+            # Define core columns that should always be present
+            core_columns = ['sequence', 'success', 'error', 'antigen', 'antigen_id', 
+                            'antigen_pdb_chain_id', 'molecular_weight', 'molecular_formula', 'warnings']
             
+            # Explicitly drop weighted_scores and total_score columns (ranker fields)
+            columns_to_drop_ranker = ['weighted_scores', 'total_score']
+            for col in columns_to_drop_ranker:
+                if col in df.columns:
+                    df = df.drop(columns=[col], errors='ignore')
+
+            # Filter metric columns based on self.metrics_to_run
+            if self.metrics_to_run is not None:
+                allowed_metric_prefixes = [m.value.lower().replace(" ", "_").replace("-", "") for m in self.metrics_to_run]
+                
+                metric_columns_to_keep = []
+                all_current_columns = list(df.columns)
+
+                for col_name in all_current_columns:
+                    is_core = col_name in core_columns
+                    is_allowed_metric = any(col_name.startswith(prefix + "_") or col_name == prefix for prefix in allowed_metric_prefixes)
+                    
+                    # Special case: if a category in metrics_to_run has no sub-metrics (e.g., just 'blast' if it's a simple field)
+                    # then the prefix itself should be kept if it's a column name.
+                    # Example: if 'blast' is in allowed_metric_prefixes and there's a column 'blast'
+
+                    if is_core or is_allowed_metric:
+                        metric_columns_to_keep.append(col_name)
+                
+                # Ensure core columns that might have been dropped if not present in any record are added back if necessary
+                # (though DataFrame creation from list of dicts usually handles this by creating NaN columns)
+                final_columns_for_df = [col for col in core_columns if col in df.columns] # Start with existing core
+                for col in metric_columns_to_keep: # Add allowed metrics
+                    if col not in final_columns_for_df and col in df.columns:
+                        final_columns_for_df.append(col)
+                
+                df = df[final_columns_for_df]
+
+            # Convert list-like warnings to string for CSV
+            if 'warnings' in df.columns:
+                 df['warnings'] = df['warnings'].apply(lambda x: "; ".join(x) if isinstance(x, list) else x)
+                 
+            # Define the desired column order based on user requirements
+            # First part of columns for validation output
+            desired_validation_columns = [
+                # Basic Identifiers
+                "sequence",
+                "antigen",
+                "antigen_id",
+                "antigen_pdb_chain_id",
+                
+                # Molecular Properties
+                "molecular_weight",
+                "molecular_formula",
+
+                # General Status / Logs
+                "warnings",
+                "success",
+                "error",
+                
+                # BLAST
+                "blast",
+                
+                # ProtParam Analysis
+                "protparam_molecular_weight",
+                "protparam_aromaticity",
+                "protparam_instability_index",
+                "protparam_isoelectric_point",
+                "protparam_gravy",
+                "protparam_hydrophobic_amino_acids_percentage",
+                "protparam_hydrophilic_amino_acids_percentage",
+                "protparam_predicted_solubility",
+                "protparam_secondary_structure_fraction",
+                
+                # Immunogenicity
+                'immunogenicity_immunogenic_score',
+                'immunogenicity_strong_binding',
+                'immunogenicity_moderate_binding',
+                'immunogenicity_weak_binding',
+                
+                # Stability
+                "stability_melting_temperature_celsius",
+                "stability_normalized_stability_score",
+                "stability_details_stabilizing_residues_count",
+                "stability_details_destabilizing_residues_count",
+                "stability_details_sequence_length",
+                "stability_details_unrecognized_residues_count",
+                
+                
+                # Aggregation
+                "aggregation_aggregation_propensity",
+                "aggregation_aggregation_prone_regions",
+                "aggregation_average_aggregation_score",
+                
+                # Glycosylation
+                'glycosylation_n_glycosylation_sites',
+                'glycosylation_n_glycosylation_count',
+                'glycosylation_o_glycosylation_sites',
+                'glycosylation_o_glycosylation_count',
+                
+                # Structure (Basic)
+                "structure_message",
+                "structure_project_id",
+                "structure_gmqe",
+                "structure_pdb_file_path",
+
+                # Structure Model Details
+                "structure_model_details_model_id",
+                "structure_model_details_status",
+                "structure_model_details_qmean",
+                "structure_model_details_coordinate_url",
+                "structure_model_details_modelcif_url",
+                "structure_date_created",
+                "structure_project_title",
+                "structure_view_url"
+                
+                
+                # Epitope Prediction
+                # "epitope_iedb_raw_results_df",
+                "epitope_predicted_epitopes",
+                "epitope_epitope_sequences_list",
+                "epitope_epitope_count",
+                "epitope_overall_average_score",
+                "epitope_parameters_method",
+                "epitope_parameters_sequence_length",
+                "epitope_parameters_window_size",
+
+                # Conservancy
+                "conservancy_results",
+                "conservancy_conservancy_score",
+                
+                # Developability
+                "developability_matched_proteins_df",
+                "developability_search_summary_has_active_matches",
+                "developability_search_summary_threshold_used",
+                "developability_search_summary_search_time_seconds",
+                "developability_search_summary_matches_found_count",
+                "developability_developability_score",
+                "developability_performance_statistics_total_database_entries",
+                "developability_performance_statistics_candidates_after_length_filter",
+                "developability_performance_statistics_query_sequence_length",
+                "developability_performance_statistics_final_matches_found",
+                "developability_report_string",
+
+                # Errors
+                "immunogenicity_error",
+                "binding_affinity_error",
+                "structure_error",
+                "epitope_error",
+                "conservancy_error",
+            ]
+            
+            # Create a list of available columns in the desired order
+            ordered_columns = [col for col in desired_validation_columns if col in df.columns]
+            
+            # Add any remaining columns that might not be in the desired order list
+            remaining_columns = [col for col in df.columns if col not in ordered_columns]
+            ordered_columns.extend(remaining_columns)
+            
+            # Reorder the DataFrame columns
+            df = df[ordered_columns]
+
             output_dir_for_csv = os.path.dirname(output_csv_path)
-            if output_dir_for_csv:
+            if output_dir_for_csv: # Ensure the directory exists
                 os.makedirs(output_dir_for_csv, exist_ok=True)
             
             df.to_csv(output_csv_path, index=False)
-            logging.info(f"Successfully saved metrics for {len(metrics_dict_list)} proteins to CSV: {output_csv_path}")
-            print(f"INFO: Metrics for {len(metrics_dict_list)} proteins saved to {output_csv_path}")
+            logging.info(f"Successfully saved validation results for {len(df)} proteins to CSV: {output_csv_path}")
+            print(f"INFO: Validation results for {len(df)} proteins saved to {output_csv_path}")
         except Exception as e:
-            logging.error(f"Error saving metrics to CSV at {output_csv_path}: {e}")
-            print(f"ERROR: Could not save metrics to CSV: {e}")
+            import traceback
+            logging.error(f"Error saving validation results to CSV at {output_csv_path}: {e}\\n{traceback.format_exc()}")
+            print(f"ERROR: Could not save validation results to CSV: {e}")
 
     def save_processing_results(self, results: List[ProcessingResult], output_dir: str):
         """

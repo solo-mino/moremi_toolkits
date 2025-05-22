@@ -645,7 +645,7 @@ class ProteinValidator:
                         self._add_warning(protein_metrics, MetricCategory.CONSERVANCY.value, "Skipped: dependent epitope prediction was skipped by user.")
                         raise ValueError("Conservancy calculation skipped due to epitope prediction being skipped by user.")
 
-                    conservancy_result = predict_conservancy(sequence, epitopes_for_conservancy, save_csv = False, display_results = False)
+                    conservancy_result = predict_conservancy(sequence, epitopes_for_conservancy, save_csv = False, )
                     metrics['conservancy'] = conservancy_result
                     protein_metrics.conservancy = metrics['conservancy']
                     logging.info(f"│   └── ✓ Conservancy analysis complete")
