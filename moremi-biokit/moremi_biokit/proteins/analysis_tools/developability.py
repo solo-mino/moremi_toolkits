@@ -6,13 +6,23 @@ from collections import defaultdict
 import re
 import os
 import time
+import importlib.resources as pkg_resources
 
 class ProteinComparisonTool:
-    def __init__(self, csv_path: str = None):
+    def __init__(self):
         """Initialize the tool with a path to the SAbDab CSV file."""
-        if csv_path is None:
-            csv_path = os.path.join(os.path.dirname(__file__), "TheraSAbDab_SeqStruc_OnlineDownload.csv")
-        self.sabdab_df = pd.read_csv(csv_path)
+        try:
+            package_ref = pkg_resources.files('moremi_biokit.proteins.analysis_tools')
+            csv_ref = package_ref.joinpath('TheraSAbDab_SeqStruc_OnlineDownload.csv')
+            
+            with pkg_resources.as_file(csv_ref) as csv_path_resolved:
+                self.sabdab_df = pd.read_csv(csv_path_resolved)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "TheraSAbDab_SeqStruc_OnlineDownload.csv not found in moremi_biokit.proteins.utils package. "
+                "Please ensure the CSV file is included in the package installation."
+            )
+
         
         # Initialize aligners for quick and accurate modes
         self.quick_aligner = PairwiseAligner()
@@ -277,7 +287,6 @@ def predict_developability(
     similarity_threshold: float = 0.7,
     progressive_threshold: Optional[Tuple[float, float]] = None,
     quick_mode: bool = True,
-    sabdab_csv_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """Predict the developability of an protein sequence by comparing it with known proteins.
 
@@ -295,9 +304,7 @@ def predict_developability(
             or a match is found. If None, single threshold search is used. Defaults to None.
         quick_mode (bool, optional): If True, uses a faster alignment algorithm. 
             If False, uses a more sensitive (BLOSUM62) alignment. Defaults to True.
-        sabdab_csv_path (Optional[str], optional): Path to the SAbDab CSV file. 
-            If None, the ProteinComparisonTool will use its default path. 
-            Defaults to None.
+        
 
     Returns:
         Dict[str, Any]: A dictionary containing developability prediction results:
@@ -319,7 +326,7 @@ def predict_developability(
 
     # Initialize tool
     try:
-        tool = ProteinComparisonTool(csv_path=sabdab_csv_path)
+        tool = ProteinComparisonTool()
     except Exception as e:
         return {
             "error": f"Failed to initialize ProteinComparisonTool: {e}",

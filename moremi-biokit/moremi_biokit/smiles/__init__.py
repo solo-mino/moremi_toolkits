@@ -42,7 +42,6 @@ from .small_molecule_validator_v3 import (
     MoleculeMetrics,
     ProcessingResult,
     MetricCategory,
-    MetricRanges # Though MetricRanges is used internally, exposing it might be useful for advanced users
 )
 from .small_molecule_ranker_v4 import (
     SmallMoleculeRankerV4,
@@ -61,7 +60,6 @@ __all__ = [
     "MoleculeMetrics",
     "ProcessingResult",
     "MetricCategory",
-    "MetricRanges",
     "ScoringConfig",
     "property_calculators",
     "reports",

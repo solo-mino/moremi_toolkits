@@ -64,7 +64,7 @@ process-protein-batch = "moremi_biokit.proteins.batch_protein_processor:main"
 # Include assets for smiles reports (fonts, images) and proteins utils (CSV database)
 "moremi_biokit" = [
     "assets/fonts/*.ttf", 
-    "assets/images/*.png",
+    "assets/*.png",
     "proteins/utils/*.csv",
     "test_pdb_targets/proteins/*.pdb", 
     "test_pdb_targets/smiles/*.pdb", 

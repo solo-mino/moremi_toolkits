@@ -20,12 +20,13 @@ from datetime import datetime
 import os
 from dataclasses import dataclass
 from .small_molecule_validator_v3 import (
-    MoleculeMetrics, MetricCategory, MetricRanges, SmallMoleculeValidator
+    MoleculeMetrics, MetricCategory, SmallMoleculeValidator
 )
 from pathlib import Path
 from .reports import generate_enhanced_report
 import logging
 from tqdm import tqdm
+import json
 
 @dataclass
 class ScoringConfig:
@@ -180,7 +181,6 @@ class SmallMoleculeRankerV4:
     def __init__(self, config: Optional[ScoringConfig] = None, generate_pdf: Optional[bool] = False, generate_csv: Optional[bool] = True):
         """Initialize ranker with configuration"""
         self.config = config or ScoringConfig()
-        self.ranges = MetricRanges()
         self.df = None
         # Add output directory for reports
         self.reports_dir = None
@@ -506,13 +506,89 @@ class SmallMoleculeRankerV4:
                 'metric_scores': {}
             }
 
-    def rank_molecules(self, metrics_list: List[MoleculeMetrics]) -> pd.DataFrame:
+    def rank_molecules(self, metrics_input: Union[List[MoleculeMetrics], str, Path]) -> pd.DataFrame:
         """
         Rank molecules based on their metrics and generate individual reports.
+        Accepts a list of MoleculeMetrics objects or a path to a JSON file containing them.
         """
+        metrics_list: List[MoleculeMetrics]
+
+        if isinstance(metrics_input, (str, Path)):
+            json_path = Path(metrics_input)
+            logging.info(f"Attempting to load MoleculeMetrics from JSON file: {json_path}")
+            if not json_path.is_file():
+                logging.error(f"JSON file not found: {json_path}")
+                return pd.DataFrame() # Return empty DataFrame if file not found
+            try:
+                with open(json_path, 'r') as f:
+                    metrics_dict_list = json.load(f)
+                if not isinstance(metrics_dict_list, list):
+                    logging.error(f"JSON file {json_path} does not contain a list of metrics.")
+                    return pd.DataFrame()
+                
+                metrics_list = [MoleculeMetrics.from_dict(data) for data in metrics_dict_list]
+                logging.info(f"Successfully loaded {len(metrics_list)} MoleculeMetrics objects from {json_path}")
+            except json.JSONDecodeError as e_json_dec:
+                logging.error(f"Error decoding JSON from {json_path}: {e_json_dec}")
+                return pd.DataFrame()
+            except Exception as e_load:
+                logging.error(f"Error loading or parsing MoleculeMetrics from {json_path}: {e_load}", exc_info=True)
+                return pd.DataFrame()
+        elif isinstance(metrics_input, list) and all(isinstance(m, MoleculeMetrics) for m in metrics_input):
+            metrics_list = metrics_input
+        elif isinstance(metrics_input, list) and not metrics_input: # Empty list is fine
+             metrics_list = []
+        else:
+            logging.error(f"Invalid input type for metrics_input: {type(metrics_input)}. Expected List[MoleculeMetrics], str, or Path.")
+            return pd.DataFrame()
+
         if not metrics_list:
             logging.warning("⚠️ No molecules to rank!")
             return pd.DataFrame()
+
+        # CREATE REAL-TIME BACKUP FILES - Only when we have a reports_dir set (from batch processing)
+        if self.reports_dir and metrics_list:
+            try:
+                reports_dir_path = Path(self.reports_dir)
+                realtime_csv_backup_path = reports_dir_path / "realtime_sm_validation_attempts.csv"
+                realtime_json_backup_path = reports_dir_path / "realtime_sm_successful_metrics.json"
+                
+                logging.info(f"Creating real-time backup files:")
+                logging.info(f"  CSV backup: {realtime_csv_backup_path}")
+                logging.info(f"  JSON backup: {realtime_json_backup_path}")
+                
+                # Save JSON backup of successful metrics
+                dict_list_to_save = [m.to_dict() for m in metrics_list]
+                with open(realtime_json_backup_path, 'w') as f_json:
+                    json.dump(dict_list_to_save, f_json, indent=2)
+                logging.info(f"✅ Created JSON backup with {len(metrics_list)} successful metrics")
+                
+                # Create CSV backup (simplified format since these are already processed metrics)
+                csv_records = []
+                for m in metrics_list:
+                    record = {
+                        'smiles': m.smiles,
+                        'molecular_formula': m.molecular_formula,
+                        'molecular_weight': m.molecular_weight,
+                        'success': True,
+                        'error': None,
+                        'warnings': "; ".join(m.warnings) if m.warnings else ""
+                    }
+                    # Add flattened metrics
+                    metrics_dict = m.to_dict().get('metrics', {})
+                    for cat_key, cat_value in metrics_dict.items():
+                        if isinstance(cat_value, dict):
+                            for sub_key, sub_value in cat_value.items():
+                                record[f'{cat_key}_{sub_key}'] = sub_value
+                    csv_records.append(record)
+                
+                if csv_records:
+                    df_backup = pd.DataFrame(csv_records)
+                    df_backup.to_csv(realtime_csv_backup_path, index=False)
+                    logging.info(f"✅ Created CSV backup with {len(csv_records)} records")
+                    
+            except Exception as e:
+                logging.error(f"❌ Error creating real-time backup files: {e}")
 
         logging.info(f"🎯 Ranking {len(metrics_list)} molecules...")
         
@@ -792,7 +868,9 @@ class SmallMoleculeRankerV4:
 def rank_molecules_from_metrics(
     metrics_input: Union[str, List[dict]],
     output_dir: str,
-    config: Optional[ScoringConfig] = None
+    config: Optional[ScoringConfig] = None,
+    generate_pdf: bool = False,
+    generate_csv: bool = True
 ) -> pd.DataFrame:
     """
     Main function to rank molecules from metrics file or list.
@@ -801,36 +879,132 @@ def rank_molecules_from_metrics(
         metrics_input: Either a path to metrics file or a list of metrics dictionaries
         output_dir: Directory to save ranking reports
         config: Optional custom scoring configuration
+        generate_pdf: Whether to generate PDF reports for individual molecules.
+        generate_csv: Whether to generate CSV reports for individual molecules.
         
     Returns:
         DataFrame with ranked molecules
     """
-    # Initialize validator and ranker
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    main_output_dir = Path(output_dir) / f"sm_ranking_run_{run_timestamp}"
+    main_output_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = main_output_dir / "sm_ranking_process.log"
+    
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
+        handlers=[
+            logging.StreamHandler(), 
+            logging.FileHandler(log_file)
+        ]
+    )
+    logging.info(f"Small Molecule Ranking process started. Output Dir: {main_output_dir}")
+
     validator = SmallMoleculeValidator()
-    ranker = SmallMoleculeRankerV4(config)
-    ranker.set_output_directory(output_dir)
+    ranker = SmallMoleculeRankerV4(config, generate_pdf=generate_pdf, generate_csv=generate_csv)
+    ranker.set_output_directory(str(main_output_dir)) 
     
-    # Process molecules based on input type
+    realtime_csv_backup_path = main_output_dir / "realtime_sm_validation_attempts.csv"
+    realtime_json_backup_path = main_output_dir / "realtime_sm_successful_metrics.json"
+
+    logging.info(f"Real-time CSV backup for small molecules will be at: {realtime_csv_backup_path}")
+    logging.info(f"Real-time JSON backup for small molecules will be at: {realtime_json_backup_path}")
+
+    # Check if metrics_input is raw SMILES (string file path or list of strings) or processed metrics
     if isinstance(metrics_input, str):
-        # Process from file
-        results = validator.process_molecules(metrics_input, output_dir)
-        metrics_list = validator.get_successful_metrics(results)
+        # File path to SMILES - use validator's process_molecules for backup
+        logging.info(f"Processing SMILES from file: {metrics_input}")
+        all_processing_results = validator.process_molecules(
+            input_source=metrics_input, 
+            output_dir=str(main_output_dir / "validation_temp_outputs"),
+            realtime_csv_backup_path=str(realtime_csv_backup_path),
+            realtime_json_backup_path=str(realtime_json_backup_path)
+        )
+        metrics_for_ranking = validator.get_successful_metrics(all_processing_results)
+        
     elif isinstance(metrics_input, list):
-        # Directly use the provided metrics list
-        metrics_list = metrics_input
+        # Check if it's a list of SMILES strings or already processed metrics
+        if metrics_input and isinstance(metrics_input[0], str):
+            # List of SMILES strings - use validator's process_molecules for backup
+            logging.info(f"Processing {len(metrics_input)} SMILES strings")
+            all_processing_results = validator.process_molecules(
+                input_source=metrics_input, 
+                output_dir=str(main_output_dir / "validation_temp_outputs"),
+                realtime_csv_backup_path=str(realtime_csv_backup_path),
+                realtime_json_backup_path=str(realtime_json_backup_path)
+            )
+            metrics_for_ranking = validator.get_successful_metrics(all_processing_results)
+            
+        else:
+            # Already processed metrics - create backup files manually
+            logging.info(f"Processing {len(metrics_input)} already-processed metrics")
+            try:
+                # Convert dict metrics to MoleculeMetrics objects
+                if metrics_input and isinstance(metrics_input[0], dict):
+                    from .small_molecule_validator_v3 import MoleculeMetrics
+                    metrics_for_ranking = [MoleculeMetrics.from_dict(data) for data in metrics_input]
+                else:
+                    metrics_for_ranking = metrics_input
+                
+                # Create backup files for already-processed metrics
+                if metrics_for_ranking:
+                    # Save JSON backup of successful metrics
+                    dict_list_to_save = [m.to_dict() for m in metrics_for_ranking]
+                    with open(realtime_json_backup_path, 'w') as f_json:
+                        json.dump(dict_list_to_save, f_json, indent=2)
+                    logging.info(f"Created JSON backup with {len(metrics_for_ranking)} successful metrics")
+                    
+                    # Create CSV backup (simplified format since we don't have processing results)
+                    csv_records = []
+                    for m in metrics_for_ranking:
+                        record = {
+                            'smiles': m.smiles,
+                            'molecular_formula': m.molecular_formula,
+                            'molecular_weight': m.molecular_weight,
+                            'success': True,
+                            'error': None,
+                            'warnings': "; ".join(m.warnings)
+                        }
+                        # Add flattened metrics
+                        metrics_dict = m.to_dict().get('metrics', {})
+                        for cat_key, cat_value in metrics_dict.items():
+                            if isinstance(cat_value, dict):
+                                for sub_key, sub_value in cat_value.items():
+                                    record[f'{cat_key}_{sub_key}'] = sub_value
+                        csv_records.append(record)
+                    
+                    if csv_records:
+                        df_backup = pd.DataFrame(csv_records)
+                        df_backup.to_csv(realtime_csv_backup_path, index=False)
+                        logging.info(f"Created CSV backup with {len(csv_records)} records")
+                        
+            except Exception as e:
+                logging.error(f"Error creating backup files for processed metrics: {e}")
+                metrics_for_ranking = []
     else:
-        raise TypeError("metrics_input must be either a file path (str) or a list of metrics dictionaries")
+        logging.error(f"Invalid metrics_input type: {type(metrics_input)}")
+        metrics_for_ranking = []
     
-    if not metrics_list:
-        raise ValueError("No valid molecules found in input")
+    if not metrics_for_ranking:
+        logging.warning("No valid molecules found after validation. Ranking cannot proceed.")
+        if realtime_json_backup_path.exists():
+            logging.info(f"Attempting to load metrics from existing backup: {realtime_json_backup_path}")
+            final_ranked_df = ranker.rank_molecules(str(realtime_json_backup_path))
+            if not final_ranked_df.empty:
+                logging.info(f"Successfully ranked molecules from backup JSON file.")
+                return final_ranked_df
+            else:
+                logging.warning(f"Failed to rank molecules even from backup JSON: {realtime_json_backup_path}")
+        return pd.DataFrame() 
     
-    # Rank molecules and generate reports
-    rankings = ranker.rank_molecules(metrics_list)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ranker.save_rankings(output_dir, timestamp)
-    ranker.generate_reports(output_dir, timestamp)
+    final_ranked_df = ranker.rank_molecules(metrics_for_ranking)
     
-    return rankings
+    logging.info(f"Ranking of small molecules complete. Final DataFrame shape: {final_ranked_df.shape}")
+    return final_ranked_df
 
 if __name__ == "__main__":
     # Example usage

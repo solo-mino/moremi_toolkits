@@ -7,11 +7,12 @@ This version focuses on collecting metrics without pass/fail judgments for ranki
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Union
+from typing import List, Dict, Optional, Union, Any
 import pandas as pd
 from enum import Enum
 import os
 import logging
+import json # Added for JSON operations
 
 from rdkit import Chem
 from rdkit.Chem import Descriptors
@@ -42,152 +43,7 @@ class MetricCategory(Enum):
     EXCRETION = "Excretion"
     TOXICITY = "Toxicity"
 
-@dataclass
-class MetricRanges:
-    """
-    Reference ranges for molecular properties based on the comprehensive metrics breakdown.
-    These ranges are used for normalization and reporting, not for pass/fail criteria.
-    """
-    
-    # Physicochemical Properties
-    physicochemical = {
-        'tpsa': (0, 140),  # Å² (Ertl et al., 2000)
-        'logp': {
-            'optimal': (1.0, 3.0),       # Optimal range
-            'ranges': [
-                (-float('inf'), 0),      # Poor membrane permeability
-                (0, 1),                  # Suboptimal
-                (1, 3),                  # Optimal
-                (3, 5),                  # Good permeability, decreasing solubility
-                (5, float('inf'))        # Poor solubility, toxicity concerns
-            ]
-        }
-    }
-    
-    # Lipophilicity - Display only, does not affect ranking
-    lipophilicity = {
-        'ilogp': None,
-        'xlogp3': None,
-        'wlogp': None,
-        'mlogp': None,
-        'silicos_it': None,
-        'consensus_logp': None
-    }
-    
-    # Drug-likeness
-    druglikeness = {
-        'lipinski': {
-            'hbd': 5,                    # H-bond donors
-            'hba': 10,                   # H-bond acceptors
-            'mw': 500,                   # Molecular weight
-            'logp': 5,                   # LogP
-            'molar_refractivity': (40, 130)  # Molar refractivity
-        },
-        'bioavailability': {
-            'high': 0.7                  # High bioavailability threshold
-        }
-    }
-    
-    # Medicinal Chemistry
-    medicinal_chemistry = {
-        'synthetic_accessibility': {
-            'very_easy': (1, 2),
-            'easy': (2, 3),
-            'moderate': (3, 5),
-            'difficult': (5, 7),
-            'very_difficult': (7, 10)
-        },
-        'qed': {
-            'high': 0.67,
-            'moderate': (0.35, 0.67),
-            'low': 0.35
-        }
-    }
-    
-    # Absorption
-    absorption = {
-        'caco2': {
-            'high': -4.7,                # log cm/s
-            'moderate': (-5.0, -4.7),
-            'low': -5.0
-        },
-        'pampa': {
-            'high': -4.7,                # log cm/s
-            'moderate': (-5.0, -4.7),
-            'low': -5.0
-        },
-        'mdck': {
-            'high': -4.7,                # log cm/s
-            'moderate': (-5.0, -4.7),
-            'low': -5.0
-        },
-        'hia': {
-            'high': 0.8,                 # >80%
-            'moderate': (0.3, 0.8),
-            'low': 0.3
-        },
-        'pgp_substrate': {
-            'substrate': 0.5,
-            'non_substrate': 0.3
-        },
-        'pgp_inhibitor': {
-            'inhibitor': 0.5,
-            'non_inhibitor': 0.3
-        }
-    }
-    
-    # Distribution
-    distribution = {
-        'vdss': 0.71,                    # L/kg
-        'ppb': {
-            'high': 90,                  # >90%
-            'moderate': (70, 90),
-            'low': 70
-        },
-        'bbb': {
-            'high': 0.8,                 # >80%
-            'moderate': (0.3, 0.8),
-            'low': 0.3
-        },
-        'fu': {
-            'high_binding': 0.1,
-            'moderate': (0.1, 0.3),
-            'low_binding': 0.3
-        }
-    }
-    
-    # Excretion
-    excretion = {
-        'half_life': {
-            'long': 24,                  # hours
-            'moderate': (6, 24),
-            'short': 6
-        },
-        'clearance': {
-            'low': 3,                    # mL/min/kg
-            'intermediate': (3, 8),
-            'high': 8
-        }
-    }
-    
-    # Metabolism
-    metabolism = {
-        'cyp_inhibition': {
-            'strong': 1,                 # μM
-            'moderate': (1, 10),
-            'weak': 10
-        }
-    }
-    
-    # Toxicity
-    toxicity = {
-        'herg': {
-            'safe': 10,                  # μM
-            'intermediate': (1, 10),
-            'high_risk': 1
-        }
-    }
-    
+
 
 @dataclass
 class MoleculeMetrics:
@@ -231,6 +87,32 @@ class MoleculeMetrics:
             'warnings': self.warnings
         }
 
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'MoleculeMetrics':
+        """Reconstructs a MoleculeMetrics object from a dictionary (e.g., from JSON)."""
+        metrics_data = data.get('metrics', {})
+        # Helper to safely get nested metric dicts, defaulting to empty dict if key missing
+        def get_metric_category(cat_enum_val: str) -> Dict[str, float]:
+            return metrics_data.get(cat_enum_val, metrics_data.get(cat_enum_val.lower().replace(" ", "_"), {}))
+
+        return cls(
+            smiles=data.get('smiles', ''),
+            molecular_formula=data.get('molecular_formula', 'N/A'),
+            molecular_weight=data.get('molecular_weight', 0.0),
+            
+            physicochemical=get_metric_category(MetricCategory.PHYSICOCHEMICAL.value),
+            medicinal_chemistry=get_metric_category(MetricCategory.MEDICINAL_CHEMISTRY.value),
+            lipophilicity=get_metric_category(MetricCategory.LIPOPHILICITY.value),
+            druglikeness=get_metric_category(MetricCategory.DRUGLIKENESS.value),
+            absorption=get_metric_category(MetricCategory.ABSORPTION.value),
+            distribution=get_metric_category(MetricCategory.DISTRIBUTION.value),
+            metabolism=get_metric_category(MetricCategory.METABOLISM.value),
+            excretion=get_metric_category(MetricCategory.EXCRETION.value),
+            toxicity=get_metric_category(MetricCategory.TOXICITY.value),
+            
+            warnings=data.get('warnings', [])
+        )
+
 @dataclass
 class ProcessingResult:
     """Container for molecule processing results"""
@@ -259,9 +141,9 @@ class SmallMoleculeValidator:
     without making pass/fail judgments.
     """
     
-    def __init__(self, ranges: Optional[MetricRanges] = None):
+    def __init__(self):
         """Initialize validator with metric ranges"""
-        self.ranges = ranges or MetricRanges()
+        
         
     def process_molecule(self, smiles: str) -> ProcessingResult:
         """Process a single molecule and calculate all metrics"""
@@ -384,64 +266,149 @@ class SmallMoleculeValidator:
                 error=str(e)
             )
 
-    def process_molecules(self, input_source: Union[str, List[str]], output_dir: str) -> List[ProcessingResult]:
+    def _append_molecule_result_to_realtime_csv(self, result: ProcessingResult, csv_path: str):
+        """Appends a single molecule ProcessingResult to a CSV file, creating/writing headers if needed."""
+        record_to_append = {}
+        if result.success and result.metrics:
+            metric_data_flat = result.metrics.to_dict() # Get base dict
+            record_to_append['smiles'] = metric_data_flat.get('smiles')
+            record_to_append['molecular_formula'] = metric_data_flat.get('molecular_formula')
+            record_to_append['molecular_weight'] = metric_data_flat.get('molecular_weight')
+            record_to_append['success'] = True
+            record_to_append['error'] = None
+            record_to_append['warnings'] = "; ".join(metric_data_flat.get('warnings', []))
+
+            # Flatten nested metrics from the 'metrics' key
+            nested_metrics = metric_data_flat.get('metrics', {})
+            for cat_key, cat_value in nested_metrics.items():
+                if isinstance(cat_value, dict):
+                    for sub_key, sub_value in cat_value.items():
+                        record_to_append[f'{cat_key}_{sub_key}'] = sub_value
+                else:
+                    record_to_append[cat_key] = cat_value # Should not happen often with current structure
+        else: # Failed or no metrics
+            record_to_append = {
+                'smiles': result.smiles,
+                'success': False,
+                'error': result.error or "No metrics generated",
+                'molecular_formula': "N/A",
+                'molecular_weight': None,
+                'warnings': ""
+            }
+
+        # Convert all list/dict values in record to string (though most should be flat now)
+        for key, value in record_to_append.items():
+            if isinstance(value, (list, dict)):
+                record_to_append[key] = str(value)
+
+        df_record = pd.DataFrame([record_to_append])
+        file_exists = os.path.isfile(csv_path)
+        try:
+            df_record.to_csv(csv_path, mode='a', header=not file_exists, index=False)
+        except Exception as e_csv:
+            logger.error(f"Error appending to molecule realtime CSV {csv_path}: {e_csv}")
+
+    def process_molecules(self, 
+                          input_source: Union[str, List[str]], 
+                          output_dir: str, # This is for final outputs, not realtime backups
+                          realtime_csv_backup_path: Optional[str] = None,
+                          realtime_json_backup_path: Optional[str] = None
+                          ) -> List[ProcessingResult]:
         """
         Process multiple molecules from a file or a list of SMILES strings.
+        Incrementally saves all attempts to realtime_csv_backup_path and successful MoleculeMetrics to realtime_json_backup_path.
         
         Args:
             input_source: Either a path to file containing SMILES strings or a list of SMILES strings
-            output_dir: Directory to save results
+            output_dir: Base directory to save final non-realtime results (e.g., final CSV from save_metrics_to_csv).
+            realtime_csv_backup_path (Optional[str]): Path to save all validation attempts incrementally (CSV).
+            realtime_json_backup_path (Optional[str]): Path to save successful MoleculeMetrics incrementally (JSON).
         
         Returns:
             List of ProcessingResult objects containing both successful and failed molecules
         """
+        # Ensure output_dir for final results exists (though this method doesn't directly save final files itself anymore, it's good practice)
         os.makedirs(output_dir, exist_ok=True)
-        results = []
+        
+        all_processing_results: List[ProcessingResult] = []
+        current_successful_metrics_list: List[MoleculeMetrics] = []
+        smiles_list_to_process: List[str] = []
 
-        # Handle input based on its type
         if isinstance(input_source, str):
-            # Process from file
-            with open(input_source, 'r') as f:
-                for line_num, line in enumerate(f, 1):
-                    # Skip empty lines and comments
-                    line = line.strip()
-                    if not line or line.startswith('#'):
-                        continue
-                    
-                    # Extract SMILES (assuming first column is SMILES)
-                    smiles = line.split()[0]
-                    
-                    result = self.process_molecule(smiles)
-                    results.append(result)
-        
+            try:
+                with open(input_source, 'r') as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+                        smiles_list_to_process.append(line.split()[0])
+            except FileNotFoundError:
+                logger.error(f"Input SMILES file not found: {input_source}")
+                return [] # Early exit if file not found
+            except Exception as e_file:
+                logger.error(f"Error reading SMILES file {input_source}: {e_file}")
+                return []
         elif isinstance(input_source, list):
-            # Process from list of SMILES
-            for smiles in input_source:
-                if smiles and isinstance(smiles, str):
-                    smiles = smiles.strip()
-                    result = self.process_molecule(smiles)
-                    results.append(result)
-        
+            smiles_list_to_process = [s.strip() for s in input_source if isinstance(s, str) and s.strip()]
         else:
+            logger.error("input_source must be either a file path (str) or a list of SMILES strings")
             raise TypeError("input_source must be either a file path (str) or a list of SMILES strings")
+
+        if not smiles_list_to_process:
+            logger.warning("No SMILES strings to process.")
+            # Touch backup files if paths are provided, so they exist even if empty
+            if realtime_csv_backup_path and not os.path.exists(realtime_csv_backup_path):
+                 pd.DataFrame([]).to_csv(realtime_csv_backup_path, index=False)
+            if realtime_json_backup_path and not os.path.exists(realtime_json_backup_path):
+                with open(realtime_json_backup_path, 'w') as f_json_empty:
+                    json.dump([], f_json_empty)
+            return []
+
+        # Ensure backup directories exist if paths are provided
+        if realtime_csv_backup_path:
+            # os.path.dirname can return empty string if path is just a filename
+            csv_backup_dir = os.path.dirname(realtime_csv_backup_path)
+            if csv_backup_dir: os.makedirs(csv_backup_dir, exist_ok=True)
+        if realtime_json_backup_path:
+            json_backup_dir = os.path.dirname(realtime_json_backup_path)
+            if json_backup_dir: os.makedirs(json_backup_dir, exist_ok=True)
+
+        for idx, smiles_str in enumerate(smiles_list_to_process, 1):
+            logger.info(f"Processing molecule {idx}/{len(smiles_list_to_process)}: {smiles_str}")
+            result = self.process_molecule(smiles_str)
+            all_processing_results.append(result)
+
+            if realtime_csv_backup_path:
+                try:
+                    self._append_molecule_result_to_realtime_csv(result, realtime_csv_backup_path)
+                except Exception as e_csv_append:
+                    logger.error(f"Failed to append to molecule realtime CSV backup {realtime_csv_backup_path} for {smiles_str}: {e_csv_append}")
+            
+            if result.success and result.metrics:
+                current_successful_metrics_list.append(result.metrics)
+                if realtime_json_backup_path:
+                    try:
+                        dict_list_to_save = [pm.to_dict() for pm in current_successful_metrics_list]
+                        with open(realtime_json_backup_path, 'w') as f_json:
+                            json.dump(dict_list_to_save, f_json, indent=2)
+                    except Exception as e_json_write:
+                        logger.error(f"Failed to update molecule realtime JSON backup {realtime_json_backup_path} for {smiles_str}: {e_json_write}")
+
+        successful_count = len(current_successful_metrics_list)
+        failed_count = len(all_processing_results) - successful_count
         
-        # Print summary
-        successful = [r for r in results if r.success]
-        failed = [r for r in results if not r.success]
+        logger.info("\nProcessing Summary:")
+        logger.info(f"Total molecules attempted: {len(all_processing_results)}")
+        logger.info(f"Successfully processed: {successful_count}")
+        logger.info(f"Failed: {failed_count}")
         
-        print("\nProcessing Summary:")
-        print(f"Total molecules: {len(results)}")
-        print(f"Successfully processed: {len(successful)}")
-        print(f"Failed: {len(failed)}")
+        if failed_count > 0:
+            logger.warning("\nFailed Molecules Details:")
+            for res_fail in all_processing_results:
+                if not res_fail.success:
+                    logger.warning(f"  SMILES: {res_fail.smiles}, Error: {res_fail.error}")
         
-        if failed:
-            print("\nFailed Molecules:")
-            for result in failed:
-                print(f"SMILES: {result.smiles}")
-                print(f"Error: {result.error}")
-                print("-" * 80)
-        
-        return results
+        return all_processing_results
 
     def get_successful_metrics(self, results: List[ProcessingResult]) -> List[MoleculeMetrics]:
         """Extract only successful metrics from processing results"""

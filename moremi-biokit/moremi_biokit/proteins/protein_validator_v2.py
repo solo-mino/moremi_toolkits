@@ -396,7 +396,7 @@ class ProteinValidatorV2:
                     raise ValueError("PDB ID or Chain part empty in target_antigen_pdb_chain_id")
 
                 logging.info(f"Attempting to fetch sequence via MoreMi microservice for '{target_antigen_pdb_chain_id}'.")
-                seq_details_microservice = rcsb.fetch_sequence_details_by_pdb_chain_id(target_antigen_pdb_chain_id) 
+                seq_details_microservice = rcsb.fetch_sequence_details_by_pdb_chain_id(target_antigen_pdb_chain_id)
 
                 if seq_details_microservice and seq_details_microservice.get('sequence'):
                     self.target_antigen_sequence = seq_details_microservice['sequence']
@@ -404,7 +404,7 @@ class ProteinValidatorV2:
                     self.target_antigen_pdb_id = seq_details_microservice.get('pdb_id', pdb_id_part_ms.lower())
                     self.target_antigen_chain_id = seq_details_microservice.get('chain_id', chain_id_part_ms.upper())
                     logging.info(f"🔍 Fetched sequence (len: {len(self.target_antigen_sequence)}) for {self.target_antigen_pdb_id}_{self.target_antigen_chain_id} via microservice. Now predicting structure.")
-                    
+                        
                     predicted_pdb_path = self._predict_antigen_structure(self.target_antigen_sequence, self.antigen_pdb_download_path)
                     if predicted_pdb_path:
                         self.target_antigen_pdb_path = predicted_pdb_path
@@ -431,7 +431,7 @@ class ProteinValidatorV2:
             logging.info(f"Priority 4: 🔍 Using provided/derived antigen sequence (len: {len(current_sequence_to_predict)}) for structure prediction as no PDB path resolved yet.")
             # Ensure self.target_antigen_sequence is set with the sequence we are about to use
             if not self.target_antigen_sequence: self.target_antigen_sequence = current_sequence_to_predict
-
+            
             predicted_pdb_path = self._predict_antigen_structure(current_sequence_to_predict, self.antigen_pdb_download_path)
             if predicted_pdb_path:
                 self.target_antigen_pdb_path = predicted_pdb_path

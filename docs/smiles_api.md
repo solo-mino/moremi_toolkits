@@ -95,10 +95,8 @@ from moremi_biokit.smiles import SmallMoleculeValidator
 **Initialization:**
 
 ```python
-def __init__(self, ranges: Optional[MetricRanges] = None):
+def __init__(self):
 ```
-
-- `ranges` (Optional[`MetricRanges`]): Optionally provide an instance of `MetricRanges` (though currently, ranges are primarily used internally for reference within the validator/ranker and not for pass/fail criteria).
 
 **Key Methods:**
 
@@ -303,6 +301,5 @@ convert-smiles --smiles <input_smiles_file> --output <output_directory>
 - **`ProcessingResult`**: (`smiles.small_molecule_validator_v3`) Wraps the result of `process_molecule`, indicating success/failure and holding either `MoleculeMetrics` or an error message.
 - **`ScoringConfig`**: (`smiles.small_molecule_ranker_v4`) Defines weights and functions for scoring metrics during ranking.
 - **`MetricCategory`**: (`smiles.small_molecule_validator_v3`) Enum for metric categories.
-- **`MetricRanges`**: (`smiles.small_molecule_validator_v3`) Holds reference ranges (mostly informational).
 
 This documentation provides a guide to the main components and usage patterns of the `moremi_biokit.smiles` subpackage. For implementation details, refer to the specific module and class docstrings in the source code.

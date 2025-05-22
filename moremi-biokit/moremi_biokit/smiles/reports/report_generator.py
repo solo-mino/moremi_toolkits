@@ -25,10 +25,11 @@ class MoleculeReportPDF(FPDF):
         
          # Set up fonts using importlib.resources
         try:
-            assets_ref = pkg_resources.files('moremi_biokit.assets')
+            package_ref = pkg_resources.files('moremi_biokit')
+            assets_dir_ref = package_ref.joinpath('assets')
             
-            regular_font_ref = assets_ref.joinpath('fonts', 'SpaceGrotesk-Regular.ttf')
-            bold_font_ref = assets_ref.joinpath('fonts', 'SpaceGrotesk-Bold.ttf')
+            regular_font_ref = assets_dir_ref.joinpath('fonts', 'SpaceGrotesk-Regular.ttf')
+            bold_font_ref = assets_dir_ref.joinpath('fonts', 'SpaceGrotesk-Bold.ttf')
 
             with pkg_resources.as_file(regular_font_ref) as regular_font_path:
                 self.add_font('SpaceGrotesk', '', str(regular_font_path), uni=True)
@@ -50,7 +51,9 @@ class MoleculeReportPDF(FPDF):
         """Add header to pages"""
          # Add logo using importlib.resources
         try:
-            logo_ref = pkg_resources.files('moremi_biokit.assets').joinpath('minologo.png')
+            package_ref = pkg_resources.files('moremi_biokit')
+            assets_dir_ref = package_ref.joinpath('assets')
+            logo_ref = assets_dir_ref.joinpath('minologo.png')
             with pkg_resources.as_file(logo_ref) as logo_path:
                 if logo_path.exists(): # Check if path from context manager is valid
                     self.image(str(logo_path), 10, 15, 15)

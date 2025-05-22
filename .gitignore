@@ -5,6 +5,7 @@
 
 moremi-biokit/tests/d_test/
 some.txt
+moremi-biokit/protein_notebook_outputs/
 
 # linux pkl files
 *.pkl
