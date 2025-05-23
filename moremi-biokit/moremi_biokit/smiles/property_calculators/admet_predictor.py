@@ -17,7 +17,7 @@ Key Features:
 
 from rdkit import Chem
 from rdkit.Chem import Descriptors, AllChem, rdMolDescriptors, Crippen
-from typing import Dict
+from typing import Dict, Optional
 import math
 from openbabel import openbabel as ob
 from admet_ai import ADMETModel
@@ -33,25 +33,46 @@ class ADMETPredictor:
     Provides predictions for absorption, distribution, metabolism, excretion, and toxicity properties.
     """
     
-    def __init__(self, smiles: str):
+    def __init__(self, smiles: Optional[str] = None):
         """
-        Initialize predictor with SMILES string.
+        Initialize predictor. SMILES string can be provided at instantiation or later
+        to the `calculate_admet_properties` method.
         
         Args:
-            smiles (str): SMILES representation of the molecule
+            smiles (Optional[str]): SMILES representation of the molecule. Defaults to None.
         
         Raises:
-            ValueError: If SMILES string is invalid
+            ValueError: If an initial SMILES string is provided and is invalid.
         """
-        self.smiles = smiles
-        self.mol = Chem.MolFromSmiles(self.smiles)
-        if not self.mol:
-            raise ValueError("Invalid SMILES string")
+        self.smiles: Optional[str] = None
+        self.mol: Optional[Chem.Mol] = None
+        self.properties: Dict[str, any] = {} # Initialize properties dictionary
+
+        if smiles is not None:
+            self._set_molecule_and_base_properties(smiles)
             
-        # Calculate molecular properties
-        self.properties = {}
-        self._calculate_molecular_properties()
+    def _set_molecule_and_base_properties(self, smiles_string: str):
+        """
+        Sets the molecule from a SMILES string and calculates RDKit-based physicochemical properties.
+
+        Args:
+            smiles_string (str): The SMILES string for the molecule.
+
+        Raises:
+            ValueError: If the SMILES string is invalid.
+        """
+        if not smiles_string:
+            raise ValueError("SMILES string cannot be empty.")
+            
+        current_mol = Chem.MolFromSmiles(smiles_string)
+        if not current_mol:
+            raise ValueError(f"Invalid SMILES string provided: {smiles_string}")
         
+        self.smiles = smiles_string
+        self.mol = current_mol
+        self.properties = {} # Reset properties for the new molecule
+        self._calculate_molecular_properties() # Populate RDKit descriptors
+
     def calculate_pka_openbabel(self):
         """
         Calculate pKa values using OpenBabel.
@@ -174,22 +195,51 @@ class ADMETPredictor:
         except Exception as e:
             raise ValueError(f"Error calculating molecular properties: {str(e)}")
             
-    def calculate_admet_properties(self) -> Dict[str, float]:
+    def calculate_admet_properties(self, smiles: Optional[str] = None) -> Dict[str, float]:
         """
         Calculate comprehensive ADMET properties using deep learning models.
+        SMILES string can be provided here if not set during initialization.
+
+        Args:
+            smiles (Optional[str]): SMILES representation of the molecule. 
+                                    If provided, it overrides any SMILES set at initialization
+                                    for this calculation run. Defaults to None.
         
         Returns:
-            Dict[str, float]: Dictionary containing all predicted ADMET properties with units
+            Dict[str, float]: Dictionary containing all predicted ADMET properties with units.
+        
+        Raises:
+            ValueError: If no SMILES string is available (neither at init nor as an argument)
+                        or if the provided SMILES is invalid.
         """
-        pred = model.predict(self.smiles)
+        target_smiles_str = smiles if smiles is not None else self.smiles
+
+        if target_smiles_str is None:
+            raise ValueError("SMILES string must be provided either during initialization or to this method.")
+
+        # If a new SMILES is provided to this method, or if self.mol is not set (e.g. SMILES wasn't provided at init)
+        # then (re)initialize the molecule and its base RDKit properties.
+        if smiles is not None or self.mol is None:
+            self._set_molecule_and_base_properties(target_smiles_str)
+        
+        # At this point, self.smiles, self.mol, and self.properties (with RDKit descriptors) are set.
+        # Ensure self.smiles is used for ADMET-AI prediction, as it's confirmed valid by _set_molecule_and_base_properties
+        pred = model.predict(self.smiles) # Use the validated self.smiles
+        
+        # These methods rely on self.properties which are populated by _calculate_molecular_properties
         mdck_permeability = self.predict_mdck_permeability()
         pgp_inhibitor_value = self.predict_pgp_inhibition()
         
         # Prepare values for plasma_clearance calculation
-        # Handle potential missing keys from pred gracefully for these inputs
-        vdss_for_clearance = pred.get('VDss_Lombardo', 0.0) # Default to 0 if not found
-        hepatic_cl_for_clearance = pred.get('Clearance_Hepatocyte_AZ', 0.0) # Default to 0
-        ppbr_az_for_clearance = pred.get('PPBR_AZ', 0.0) # Default to 0
+        # These also rely on self.properties for fallbacks if ADMET-AI doesn't provide them
+        vdss_for_clearance = pred.get('VDss_Lombardo', self.properties.get('vdss', 0.0))
+        hepatic_cl_for_clearance = pred.get('Clearance_Hepatocyte_AZ', self.properties.get('hepatic_clearance_val', 0.0)) # Assuming 'hepatic_clearance_val' if stored from another source
+        ppbr_az_for_clearance = pred.get('PPBR_AZ', self.properties.get('ppb_val', 0.0)) # Assuming 'ppb_val' if stored from another source
+        
+        # Ensure ppbr_az_for_clearance is a number before subtraction
+        if not isinstance(ppbr_az_for_clearance, (int, float)):
+            ppbr_az_for_clearance = 0.0 # Default to 0 if not a number
+            
         fu_for_clearance = 100.0 - ppbr_az_for_clearance
         
         plasma_clearance_value = self.predict_plasma_clearance(
