@@ -16,6 +16,7 @@ References:
 from typing import Dict, Optional, Union
 from rdkit import Chem
 from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors
+import warnings # Import the warnings module
 
 
 class PhysiochemicalProperties:
@@ -25,14 +26,19 @@ class PhysiochemicalProperties:
     This class provides methods to calculate various molecular properties that are commonly
     used in drug discovery and molecular analysis, matching SwissADME calculations.
     
+    .. deprecated:: 0.1.X 
+       This class is deprecated and will be removed in a future version. 
+       Please use `moremi_biokit.smiles.property_calculators.admet_predictor.ADMETPredictor` 
+       and its `get_physicochemical_properties()` method for a more comprehensive set of properties.
+    
     Attributes:
         smile (str): The SMILES string representation of the molecule
         molecule (rdkit.Chem.rdchem.Mol): The RDKit molecule object
         _properties_cache (Dict): Cache for storing calculated properties
     
     Example:
-        >>> mol = PhysiochemicalProperties("CC(=O)OC1=CC=CC=C1C(=O)O")
-        >>> properties = mol.calculate_physiochemical_properties()
+        >>> mol = PhysiochemicalProperties("CC(=O)OC1=CC=CC=C1C(=O)O") # Will raise DeprecationWarning
+        >>> properties = mol.calculate_physiochemical_properties() # Will raise DeprecationWarning
         >>> report = mol.generate_report()
         >>> print(report)
     """
@@ -47,6 +53,13 @@ class PhysiochemicalProperties:
         Raises:
             ValueError: If the SMILES string is invalid or cannot be parsed
         """
+        warnings.warn(
+            "The 'PhysiochemicalProperties' class is deprecated and will be removed in a future version. "
+            "Please use 'moremi_biokit.smiles.property_calculators.admet_predictor.ADMETPredictor' "
+            "and its `get_physicochemical_properties()` method instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.smile = smile
         self._properties_cache = {}
         self._initialize_molecule()
@@ -75,6 +88,9 @@ class PhysiochemicalProperties:
         """
         Calculate basic molecular properties matching SwissADME calculations.
         
+        .. deprecated:: 0.1.X
+           This method is deprecated. Use `ADMETPredictor.get_physicochemical_properties()` instead.
+        
         This method calculates various molecular properties including:
         - Molecular Formula
         - Molecular Weight (MW)
@@ -93,6 +109,13 @@ class PhysiochemicalProperties:
         Note:
             Results are cached for subsequent retrievals
         """
+        warnings.warn(
+            "The 'PhysiochemicalProperties.calculate_physiochemical_properties()' method is deprecated. "
+            "Please use 'moremi_biokit.smiles.property_calculators.admet_predictor.ADMETPredictor' "
+            "and its `get_physicochemical_properties()` method instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         # Check cache first
         cached_properties = self._get_cached_properties()
         if cached_properties:

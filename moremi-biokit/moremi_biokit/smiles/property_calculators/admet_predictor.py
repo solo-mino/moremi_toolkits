@@ -16,7 +16,7 @@ Key Features:
 """
 
 from rdkit import Chem
-from rdkit.Chem import Descriptors, AllChem
+from rdkit.Chem import Descriptors, AllChem, rdMolDescriptors, Crippen
 from typing import Dict
 import math
 from openbabel import openbabel as ob
@@ -87,11 +87,17 @@ class ADMETPredictor:
         """
         Calculate fundamental molecular properties using RDKit.
         Includes 3D structure generation, volume, density, ring analysis, and flexibility metrics.
+        Also includes properties previously in PhysiochemicalProperties class.
         """
         try:
             # Basic properties that don't require 3D structure
             mass = Descriptors.ExactMolWt(self.mol)
-            
+            mol_formula = rdMolDescriptors.CalcMolFormula(self.mol)
+            num_heavy_atoms_val = self.mol.GetNumHeavyAtoms()
+            num_aromatic_heavy_atoms_val = len([atom for atom in self.mol.GetAtoms() if atom.GetIsAromatic()])
+            fraction_csp3_val = round(Descriptors.FractionCSP3(self.mol), 2) if self.mol.GetNumHeavyAtoms() > 0 else 0.0 # Avoid error on empty mol
+            molar_refractivity_val = round(Crippen.MolMR(self.mol), 2) if self.mol.GetNumHeavyAtoms() > 0 else 0.0 # Avoid error on empty mol
+
             # Initialize with default values for 3D-dependent properties
             volume = None
             density = None
@@ -142,6 +148,11 @@ class ADMETPredictor:
             
             self.properties = {
                 'molecular_weight': mass,                    # [g/mol] Exact molecular weight
+                'molecular_formula': mol_formula,           # Molecular formula string
+                'num_heavy_atoms': num_heavy_atoms_val,     # [count] Number of heavy atoms
+                'num_aromatic_heavy_atoms': num_aromatic_heavy_atoms_val, # [count] Number of aromatic heavy atoms
+                'fraction_csp3': fraction_csp3_val,         # [0-1] Fraction of sp3 hybridized carbons
+                'molar_refractivity': molar_refractivity_val, # [Å³] Molar refractivity
                 'molecular_volume': volume,                  # [Å³] Van der Waals volume
                 'molecular_density': density,                # [g/cm³] Molecular density
                 'hydrogen_bond_acceptors': Descriptors.NumHAcceptors(self.mol),  # [count] Number of H-bond acceptors
@@ -155,14 +166,10 @@ class ADMETPredictor:
                 'molecular_rigidity': rigidity,             # [0-1] Molecular rigidity score
                 'molecular_flexibility': flexibility,        # [0-1] Molecular flexibility score
                 'topological_polar_surface_area': Descriptors.TPSA(self.mol, includeSandP=False),  # [Å²] TPSA
-                'logP': Descriptors.MolLogP(self.mol)       # [log] Octanol-water partition coefficient
+                'logP': Descriptors.MolLogP(self.mol),       # [log] Octanol-water partition coefficient
+                'pKa_acid': pka_acid,                        # Acid dissociation constant
+                'pKa_base': pka_base,                        # Base dissociation constant
             }
-            
-            # Add pKa values separately to avoid dict update issues
-            if pka_acid is not None:
-                self.properties['pKa_acid'] = pka_acid  # Acid dissociation constant
-            if pka_base is not None:
-                self.properties['pKa_base'] = pka_base  # Base dissociation constant
             
         except Exception as e:
             raise ValueError(f"Error calculating molecular properties: {str(e)}")
@@ -176,80 +183,388 @@ class ADMETPredictor:
         """
         pred = model.predict(self.smiles)
         mdck_permeability = self.predict_mdck_permeability()
+        pgp_inhibitor_value = self.predict_pgp_inhibition()
         
+        # Prepare values for plasma_clearance calculation
+        # Handle potential missing keys from pred gracefully for these inputs
+        vdss_for_clearance = pred.get('VDss_Lombardo', 0.0) # Default to 0 if not found
+        hepatic_cl_for_clearance = pred.get('Clearance_Hepatocyte_AZ', 0.0) # Default to 0
+        ppbr_az_for_clearance = pred.get('PPBR_AZ', 0.0) # Default to 0
+        fu_for_clearance = 100.0 - ppbr_az_for_clearance
+        
+        plasma_clearance_value = self.predict_plasma_clearance(
+            vdss=vdss_for_clearance,
+            hepatic_cl=hepatic_cl_for_clearance,
+            fu=fu_for_clearance
+        )
+
         admet_properties = {
+            # Physicochemical Property Percentiles (for RDKit calculated values)
+            'molecular_weight_drugbank_approved_percentile': pred.get('molecular_weight_drugbank_approved_percentile'), # [%] Molecular Weight - DrugBank Approved Percentile
+            'logP_drugbank_approved_percentile': pred.get('logP_drugbank_approved_percentile'),                         # [%] logP - DrugBank Approved Percentile
+            'hydrogen_bond_acceptors_drugbank_approved_percentile': pred.get('hydrogen_bond_acceptors_drugbank_approved_percentile'), # [%] H-Bond Acceptors - DrugBank Approved Percentile
+            'hydrogen_bond_donors_drugbank_approved_percentile': pred.get('hydrogen_bond_donors_drugbank_approved_percentile'),    # [%] H-Bond Donors - DrugBank Approved Percentile
+            'tpsa_drugbank_approved_percentile': pred.get('tpsa_drugbank_approved_percentile'),                         # [%] Topological Polar Surface Area (TPSA) - DrugBank Approved Percentile
+
             # Drug-likeness Properties
-            'qed': pred['QED'],                    # [0-1] Quantitative Estimate of Drug-likeness
-            'stereogenic_centers': pred['stereo_centers'],         # [count] Number of chiral centers
+            'qed': pred.get('QED'),                                         # [0-1] Quantitative Estimate of Drug-likeness
+            'qed_drugbank_approved_percentile': pred.get('QED_drugbank_approved_percentile'), # [%] QED - DrugBank Approved Percentile
+            'stereogenic_centers': pred.get('stereo_centers'),              # [count] Number of chiral centers
+            'stereogenic_centers_drugbank_approved_percentile': pred.get('stereo_centers_drugbank_approved_percentile'), # [%] Stereogenic Centers - DrugBank Approved Percentile
+            'lipinski_drugbank_approved_percentile': pred.get('Lipinski_drugbank_approved_percentile'), # [%] Lipinski Rule Compliance - DrugBank Approved Percentile
             
             # Absorption Properties
-            'bbb': pred['BBB_Martins'],      # [0-1] Probability of BBB penetration
-            'oral_bioavailability': pred['Bioavailability_Ma'],          # [0-1] Probability of >20% oral bioavailability
-            'hia': pred['HIA_Hou'],              # [0-1] Fraction absorbed from GI tract
-            'pampa_permeability': pred['PAMPA_NCATS'],                  # [0-1] Artificial membrane permeability
-            'caco2_permeability': pred['Caco2_Wang'],                   # log(10-⁶ cm/s] Caco-2 cell permeability
-            'mdck_permeability': mdck_permeability,                     # [log cm/s] MDCK cell permeability
-            'pgp_substrate': pred['Pgp_Broccatelli'],        # [0-1] Probability of P-gp substrate
-            'pgp_inhibitor': self.predict_pgp_inhibition(),  # [0-1] Probability of P-gp inhibition
+            'bbb': pred.get('BBB_Martins'),                                 # [0-1] Probability of BBB penetration
+            'bbb_drugbank_approved_percentile': pred.get('BBB_Martins_drugbank_approved_percentile'), # [%] BBB Martins - DrugBank Approved Percentile
+            'oral_bioavailability': pred.get('Bioavailability_Ma'),         # [0-1] Probability of >20% oral bioavailability
+            'oral_bioavailability_drugbank_approved_percentile': pred.get('Bioavailability_Ma_drugbank_approved_percentile'), # [%] Oral Bioavailability (Ma) - DrugBank Approved Percentile
+            'hia': pred.get('HIA_Hou'),                                     # [0-1] Fraction absorbed from GI tract
+            'hia_drugbank_approved_percentile': pred.get('HIA_Hou_drugbank_approved_percentile'), # [%] HIA (Hou) - DrugBank Approved Percentile
+            'pampa_permeability': pred.get('PAMPA_NCATS'),                  # [0-1] Artificial membrane permeability
+            'pampa_permeability_drugbank_approved_percentile': pred.get('PAMPA_NCATS_drugbank_approved_percentile'), # [%] PAMPA (NCATS) - DrugBank Approved Percentile
+            'caco2_permeability': pred.get('Caco2_Wang'),                   # log(10-⁶ cm/s] Caco-2 cell permeability
+            'caco2_permeability_drugbank_approved_percentile': pred.get('Caco2_Wang_drugbank_approved_percentile'), # [%] Caco2 Wang - DrugBank Approved Percentile
+            'mdck_permeability': mdck_permeability,                         # [log cm/s] MDCK cell permeability
+            'pgp_substrate': pred.get('Pgp_Broccatelli'),                   # [0-1] Probability of P-gp substrate
+            'pgp_substrate_drugbank_approved_percentile': pred.get('Pgp_Broccatelli_drugbank_approved_percentile'), # [%] Pgp Substrate (Broccatelli) - DrugBank Approved Percentile
+            'pgp_inhibitor': pgp_inhibitor_value,                           # [0-1] Probability of P-gp inhibition
             
             # Distribution Properties
-            'vdss': pred['VDss_Lombardo'],            # [L/kg] Steady-state volume of distribution
-            'ppb': min(100, max(0, pred['PPBR_AZ'])),                  # [%] Percent bound to plasma proteins (capped at 0-100%)
-            'fraction_unbound': min(100, max(0, 100 - pred['PPBR_AZ'])),     # [%] Free fraction in plasma (capped at 0-100%)
-            'aqueous_solubility': pred['Solubility_AqSolDB'],          # [log mol/L] Water solubility
-            'lipophilicity': pred['Lipophilicity_AstraZeneca'],        # [log] Lipophilicity measure
-            'hydration_free_energy': pred['HydrationFreeEnergy_FreeSolv'],  # [kcal/mol] Solvation energy
+            'vdss': pred.get('VDss_Lombardo'),                              # [L/kg] Steady-state volume of distribution
+            'vdss_drugbank_approved_percentile': pred.get('VDss_Lombardo_drugbank_approved_percentile'), # [%] VDss (Lombardo) - DrugBank Approved Percentile
+            'ppb': min(100, max(0, pred.get('PPBR_AZ', 0))),               # [%] Percent bound to plasma proteins (capped at 0-100%)
+            'ppb_drugbank_approved_percentile': pred.get('PPBR_AZ_drugbank_approved_percentile'), # [%] PPBR_AZ (underlying PPB) - DrugBank Approved Percentile
+            'fraction_unbound': min(100, max(0, 100 - pred.get('PPBR_AZ', 0))), # [%] Free fraction in plasma (capped at 0-100%)
+            'aqueous_solubility': pred.get('Solubility_AqSolDB'),           # [log mol/L] Water solubility
+            'aqueous_solubility_drugbank_approved_percentile': pred.get('Solubility_AqSolDB_drugbank_approved_percentile'), # [%] AqSolDB Solubility - DrugBank Approved Percentile
+            'lipophilicity': pred.get('Lipophilicity_AstraZeneca'),         # [log] Lipophilicity measure
+            'lipophilicity_drugbank_approved_percentile': pred.get('Lipophilicity_AstraZeneca_drugbank_approved_percentile'), # [%] Lipophilicity (AstraZeneca) - DrugBank Approved Percentile
+            'hydration_free_energy': pred.get('HydrationFreeEnergy_FreeSolv'), # [kcal/mol] Solvation energy
+            'hydration_free_energy_drugbank_approved_percentile': pred.get('HydrationFreeEnergy_FreeSolv_drugbank_approved_percentile'), # [%] Hydration Free Energy (FreeSolv) - DrugBank Approved Percentile
             
             # Clearance and Half-life
-            'hepatic_clearance': pred['Clearance_Hepatocyte_AZ'],      # [μL/min/mg] Hepatocyte clearance
-            'microsomal_clearance': pred['Clearance_Microsome_AZ'],    # [μL/min/mg] Microsomal clearance
-            'plasma_clearance': self.predict_plasma_clearance(
-                vdss=pred['VDss_Lombardo'],
-                hepatic_cl=pred['Clearance_Hepatocyte_AZ'],
-                fu=(100 - pred['PPBR_AZ'])
-            ),# [mL/min/kg] Total plasma clearance
-            'half_life': pred['Half_Life_Obach'],                      # [h] Elimination half-life
+            'hepatic_clearance': pred.get('Clearance_Hepatocyte_AZ'),       # [μL/min/mg] Hepatocyte clearance
+            'hepatic_clearance_drugbank_approved_percentile': pred.get('Clearance_Hepatocyte_AZ_drugbank_approved_percentile'), # [%] Hepatic Clearance (AZ) - DrugBank Approved Percentile
+            'microsomal_clearance': pred.get('Clearance_Microsome_AZ'),     # [μL/min/mg] Microsomal clearance
+            'microsomal_clearance_drugbank_approved_percentile': pred.get('Clearance_Microsome_AZ_drugbank_approved_percentile'), # [%] Microsomal Clearance (AZ) - DrugBank Approved Percentile
+            'plasma_clearance': plasma_clearance_value,                     # [mL/min/kg] Total plasma clearance
+            'half_life': pred.get('Half_Life_Obach'),                       # [h] Elimination half-life
+            'half_life_drugbank_approved_percentile': pred.get('Half_Life_Obach_drugbank_approved_percentile'), # [%] Half-Life (Obach) - DrugBank Approved Percentile
             
             # CYP450 Interactions
-            'cyp1a2_inhibition': pred['CYP1A2_Veith'],                # [0-1] CYP1A2 inhibition probability
-            'cyp2c19_inhibition': pred['CYP2C19_Veith'],              # [0-1] CYP2C19 inhibition probability
-            'cyp2c9_inhibition': pred['CYP2C9_Veith'],                # [0-1] CYP2C9 inhibition probability
-            'cyp2d6_inhibition': pred['CYP2D6_Veith'],                # [0-1] CYP2D6 inhibition probability
-            'cyp3a4_inhibition': pred['CYP3A4_Veith'],                # [0-1] CYP3A4 inhibition probability
-            'cyp2c9_substrate': pred['CYP2C9_Substrate_CarbonMangels'],  # [0-1] CYP2C9 substrate probability
-            'cyp2d6_substrate': pred['CYP2D6_Substrate_CarbonMangels'],  # [0-1] CYP2D6 substrate probability
-            'cyp3a4_substrate': pred['CYP3A4_Substrate_CarbonMangels'],  # [0-1] CYP3A4 substrate probability
+            'cyp1a2_inhibition': pred.get('CYP1A2_Veith'),                  # [0-1] CYP1A2 inhibition probability
+            'cyp1a2_inhibition_drugbank_approved_percentile': pred.get('CYP1A2_Veith_drugbank_approved_percentile'), # [%] CYP1A2 Inhibition (Veith) - DrugBank Approved Percentile
+            'cyp2c19_inhibition': pred.get('CYP2C19_Veith'),                # [0-1] CYP2C19 inhibition probability
+            'cyp2c19_inhibition_drugbank_approved_percentile': pred.get('CYP2C19_Veith_drugbank_approved_percentile'), # [%] CYP2C19 Inhibition (Veith) - DrugBank Approved Percentile
+            'cyp2c9_inhibition': pred.get('CYP2C9_Veith'),                  # [0-1] CYP2C9 inhibition probability
+            'cyp2c9_inhibition_drugbank_approved_percentile': pred.get('CYP2C9_Veith_drugbank_approved_percentile'), # [%] CYP2C9 Inhibition (Veith) - DrugBank Approved Percentile
+            'cyp2d6_inhibition': pred.get('CYP2D6_Veith'),                  # [0-1] CYP2D6 inhibition probability
+            'cyp2d6_inhibition_drugbank_approved_percentile': pred.get('CYP2D6_Veith_drugbank_approved_percentile'), # [%] CYP2D6 Inhibition (Veith) - DrugBank Approved Percentile
+            'cyp3a4_inhibition': pred.get('CYP3A4_Veith'),                  # [0-1] CYP3A4 inhibition probability
+            'cyp3a4_inhibition_drugbank_approved_percentile': pred.get('CYP3A4_Veith_drugbank_approved_percentile'), # [%] CYP3A4 Inhibition (Veith) - DrugBank Approved Percentile
+            'cyp2c9_substrate': pred.get('CYP2C9_Substrate_CarbonMangels'), # [0-1] CYP2C9 substrate probability
+            'cyp2c9_substrate_drugbank_approved_percentile': pred.get('CYP2C9_Substrate_CarbonMangels_drugbank_approved_percentile'), # [%] CYP2C9 Substrate (CarbonMangels) - DrugBank Approved Percentile
+            'cyp2d6_substrate': pred.get('CYP2D6_Substrate_CarbonMangels'), # [0-1] CYP2D6 substrate probability
+            'cyp2d6_substrate_drugbank_approved_percentile': pred.get('CYP2D6_Substrate_CarbonMangels_drugbank_approved_percentile'), # [%] CYP2D6 Substrate (CarbonMangels) - DrugBank Approved Percentile
+            'cyp3a4_substrate': pred.get('CYP3A4_Substrate_CarbonMangels'), # [0-1] CYP3A4 substrate probability
+            'cyp3a4_substrate_drugbank_approved_percentile': pred.get('CYP3A4_Substrate_CarbonMangels_drugbank_approved_percentile'), # [%] CYP3A4 Substrate (CarbonMangels) - DrugBank Approved Percentile
             
             # Toxicity Properties
-            'ames_mutagenicity': pred['AMES'],                         # [0-1] Bacterial mutagenicity
-            'clinical_toxicity': pred['ClinTox'],                      # [0-1] Clinical trial toxicity risk
-            'drug_induced_liver_injury': pred['DILI'],                 # [0-1] Hepatotoxicity risk
-            'herg_inhibition': pred['hERG'],                          # [0-1] hERG channel blockade risk
-            'lethal_dose_50': pred['LD50_Zhu'],                       # [log mol/kg] Median lethal dose
-            'skin_sensitization': pred['Skin_Reaction'],              # [0-1] Skin reaction probability
-            
+            'ames_mutagenicity': pred.get('AMES'),                          # [0-1] Bacterial mutagenicity
+            'ames_mutagenicity_drugbank_approved_percentile': pred.get('AMES_drugbank_approved_percentile'), # [%] AMES Mutagenicity - DrugBank Approved Percentile
+            'clinical_toxicity': pred.get('ClinTox'),                       # [0-1] Clinical trial toxicity risk
+            'clinical_toxicity_drugbank_approved_percentile': pred.get('ClinTox_drugbank_approved_percentile'), # [%] Clinical Toxicity (ClinTox) - DrugBank Approved Percentile
+            'drug_induced_liver_injury': pred.get('DILI'),                  # [0-1] Hepatotoxicity risk
+            'drug_induced_liver_injury_drugbank_approved_percentile': pred.get('DILI_drugbank_approved_percentile'), # [%] DILI - DrugBank Approved Percentile
+            'herg_inhibition': pred.get('hERG'),                            # [0-1] hERG channel blockade risk
+            'herg_inhibition_drugbank_approved_percentile': pred.get('hERG_drugbank_approved_percentile'), # [%] hERG Inhibition - DrugBank Approved Percentile
+            'lethal_dose_50': pred.get('LD50_Zhu'),                         # [log mol/kg] Median lethal dose
+            'lethal_dose_50_drugbank_approved_percentile': pred.get('LD50_Zhu_drugbank_approved_percentile'), # [%] LD50 (Zhu) - DrugBank Approved Percentile
+            'skin_sensitization': pred.get('Skin_Reaction'),                # [0-1] Skin reaction probability
+            'skin_sensitization_drugbank_approved_percentile': pred.get('Skin_Reaction_drugbank_approved_percentile'), # [%] Skin Reaction - DrugBank Approved Percentile
+            'carcinogens_lagunin_drugbank_approved_percentile': pred.get('Carcinogens_Lagunin_drugbank_approved_percentile'), # [%] Carcinogenicity (Lagunin) - DrugBank Approved Percentile
+
             # Nuclear Receptor Interactions
-            'androgen_receptor_binding': pred['NR-AR'],               # [0-1] AR binding probability
-            'androgen_receptor_lbd': pred['NR-AR-LBD'],              # [0-1] AR-LBD binding probability
-            'aryl_hydrocarbon_receptor': pred['NR-AhR'],             # [0-1] AhR activation probability
-            'aromatase_inhibition': pred['NR-Aromatase'],            # [0-1] Aromatase inhibition
-            'estrogen_receptor_binding': pred['NR-ER'],              # [0-1] ER binding probability
-            'estrogen_receptor_lbd': pred['NR-ER-LBD'],             # [0-1] ER-LBD binding probability
-            'ppar_gamma': pred['NR-PPAR-gamma'],                     # [0-1] PPAR-γ activation probability
+            'androgen_receptor_binding': pred.get('NR-AR'),                 # [0-1] AR binding probability
+            'androgen_receptor_binding_drugbank_approved_percentile': pred.get('NR-AR_drugbank_approved_percentile'), # [%] NR-AR Binding - DrugBank Approved Percentile
+            'androgen_receptor_lbd': pred.get('NR-AR-LBD'),                 # [0-1] AR-LBD binding probability
+            'androgen_receptor_lbd_drugbank_approved_percentile': pred.get('NR-AR-LBD_drugbank_approved_percentile'), # [%] NR-AR-LBD Binding - DrugBank Approved Percentile
+            'aryl_hydrocarbon_receptor': pred.get('NR-AhR'),                # [0-1] AhR activation probability
+            'aryl_hydrocarbon_receptor_drugbank_approved_percentile': pred.get('NR-AhR_drugbank_approved_percentile'), # [%] NR-AhR Activation - DrugBank Approved Percentile
+            'aromatase_inhibition': pred.get('NR-Aromatase'),               # [0-1] Aromatase inhibition
+            'aromatase_inhibition_drugbank_approved_percentile': pred.get('NR-Aromatase_drugbank_approved_percentile'), # [%] NR-Aromatase Inhibition - DrugBank Approved Percentile
+            'estrogen_receptor_binding': pred.get('NR-ER'),                 # [0-1] ER binding probability
+            'estrogen_receptor_binding_drugbank_approved_percentile': pred.get('NR-ER_drugbank_approved_percentile'), # [%] NR-ER Binding - DrugBank Approved Percentile
+            'estrogen_receptor_lbd': pred.get('NR-ER-LBD'),                 # [0-1] ER-LBD binding probability
+            'estrogen_receptor_lbd_drugbank_approved_percentile': pred.get('NR-ER-LBD_drugbank_approved_percentile'), # [%] NR-ER-LBD Binding - DrugBank Approved Percentile
+            'ppar_gamma': pred.get('NR-PPAR-gamma'),                        # [0-1] PPAR-γ activation probability
+            'ppar_gamma_drugbank_approved_percentile': pred.get('NR-PPAR-gamma_drugbank_approved_percentile'), # [%] NR-PPAR-gamma Activation - DrugBank Approved Percentile
             
             # Stress Response Pathways
-            'oxidative_stress_response': pred['SR-ARE'],             # [0-1] ARE pathway activation
-            'dna_damage_response': pred['SR-ATAD5'],                 # [0-1] DNA damage response
-            'heat_shock_response': pred['SR-HSE'],                   # [0-1] Heat shock response
-            'mitochondrial_toxicity': pred['SR-MMP'],               # [0-1] Mitochondrial membrane potential
-            'p53_pathway_activation': pred['SR-p53']                # [0-1] p53 pathway activation
+            'oxidative_stress_response': pred.get('SR-ARE'),                # [0-1] ARE pathway activation
+            'oxidative_stress_response_drugbank_approved_percentile': pred.get('SR-ARE_drugbank_approved_percentile'), # [%] SR-ARE Activation - DrugBank Approved Percentile
+            'dna_damage_response': pred.get('SR-ATAD5'),                    # [0-1] DNA damage response
+            'dna_damage_response_drugbank_approved_percentile': pred.get('SR-ATAD5_drugbank_approved_percentile'), # [%] SR-ATAD5 Activation - DrugBank Approved Percentile
+            'heat_shock_response': pred.get('SR-HSE'),                      # [0-1] Heat shock response
+            'heat_shock_response_drugbank_approved_percentile': pred.get('SR-HSE_drugbank_approved_percentile'), # [%] SR-HSE Activation - DrugBank Approved Percentile
+            'mitochondrial_toxicity': pred.get('SR-MMP'),                   # [0-1] Mitochondrial membrane potential
+            'mitochondrial_toxicity_drugbank_approved_percentile': pred.get('SR-MMP_drugbank_approved_percentile'), # [%] SR-MMP - DrugBank Approved Percentile
+            'p53_pathway_activation': pred.get('SR-p53'),                    # [0-1] p53 pathway activation
+            'p53_pathway_activation_drugbank_approved_percentile': pred.get('SR-p53_drugbank_approved_percentile') # [%] SR-p53 Activation - DrugBank Approved Percentile
         }
         
-        self.properties.update(admet_properties)
+        # Ensure all keys from pred are accessed with .get() if they might be missing
+        # For keys that are expected to be present (like 'QED', 'BBB_Martins', etc, based on admet_ai model's core output)
+        # if they were missing, it might indicate an issue with the model or input SMILES.
+        # Using .get() for all 'pred' accesses makes it more robust to variations in 'pred' dictionary content.
+
+        # Remove entries where the value is None (i.e., percentile not available from pred)
+        admet_properties_cleaned = {k: v for k, v in admet_properties.items() if v is not None}
+
+        self.properties.update(admet_properties_cleaned)
         # 
         # print(f"hepatic clearnce {self.properties['hepatic_clearance']}")
         return self.properties
         
+    def get_physicochemical_properties(self) -> Dict[str, float]:
+        """Returns physicochemical properties and their DrugBank percentiles.
+
+        Ensure `calculate_admet_properties()` has been called before this method,
+        as percentiles are sourced from its full computation. If not, only base
+        RDKit properties calculated during __init__ will be returned.
+
+        Returns:
+            Dict[str, float]: A dictionary of physicochemical properties.
+        """
+        # Keys for base physicochemical properties calculated in _calculate_molecular_properties
+        base_physicochem_keys = [
+            'molecular_weight', 'molecular_formula', 'num_heavy_atoms',
+            'num_aromatic_heavy_atoms', 'fraction_csp3', 'molar_refractivity',
+            'molecular_volume', 'molecular_density',
+            'hydrogen_bond_acceptors', 'hydrogen_bond_donors', 'rotatable_bonds',
+            'ring_count', 'max_ring_size', 'heteroatom_count', 'formal_charge',
+            'molecular_rigidity', 'molecular_flexibility',
+            'topological_polar_surface_area', 'logP', 'pKa_acid', 'pKa_base'
+        ]
+        # Keys for their DrugBank percentiles (added by calculate_admet_properties)
+        percentile_keys = [
+            'molecular_weight_drugbank_approved_percentile',
+            'logP_drugbank_approved_percentile',
+            'hydrogen_bond_acceptors_drugbank_approved_percentile',
+            'hydrogen_bond_donors_drugbank_approved_percentile',
+            'tpsa_drugbank_approved_percentile'
+        ]
+
+        if not self.properties or 'qed' not in self.properties: # 'qed' is a proxy for full ADMET calculation
+            # Only return base properties if full ADMET calculation hasn't run
+            return {key: self.properties.get(key) for key in base_physicochem_keys if self.properties.get(key) is not None}
+        else:
+            # Return base properties plus available percentiles
+            all_phys_keys = base_physicochem_keys + percentile_keys
+            return {key: self.properties.get(key) for key in all_phys_keys if self.properties.get(key) is not None}
+
+    def get_drug_likeness_properties(self) -> Dict[str, float]:
+        """Returns drug-likeness properties.
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of drug-likeness properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        drug_likeness_keys = [
+            'qed', 
+            'qed_drugbank_approved_percentile',
+            'stereogenic_centers', 
+            'stereogenic_centers_drugbank_approved_percentile',
+            'lipinski_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in drug_likeness_keys if key in self.properties}
+
+    def get_absorption_properties(self) -> Dict[str, float]:
+        """Returns absorption properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of absorption properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        absorption_keys = [
+            'bbb',
+            'bbb_drugbank_approved_percentile',
+            'oral_bioavailability',
+            'oral_bioavailability_drugbank_approved_percentile',
+            'hia',
+            'hia_drugbank_approved_percentile',
+            'pampa_permeability',
+            'pampa_permeability_drugbank_approved_percentile',
+            'caco2_permeability',
+            'caco2_permeability_drugbank_approved_percentile',
+            'mdck_permeability',
+            'pgp_substrate', 'pgp_substrate_drugbank_approved_percentile',
+            'pgp_inhibitor',
+            
+        ]
+        return {key: self.properties[key] for key in absorption_keys if key in self.properties}
+
+    def get_distribution_properties(self) -> Dict[str, float]:
+        """Returns distribution properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of distribution properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        distribution_keys = [
+            'vdss', 
+            'vdss_drugbank_approved_percentile',
+            'ppb',
+            'ppb_drugbank_approved_percentile',
+            'fraction_unbound',
+            'aqueous_solubility',
+            'aqueous_solubility_drugbank_approved_percentile',
+            'lipophilicity',
+            'lipophilicity_drugbank_approved_percentile',
+            'hydration_free_energy', 
+            'hydration_free_energy_drugbank_approved_percentile',
+        ]
+        return {key: self.properties[key] for key in distribution_keys if key in self.properties}
+
+    def get_metabolism_properties(self) -> Dict[str, float]:
+        """Returns metabolism/CYP450 interaction properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of metabolism properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        metabolism_keys = [
+            'cyp1a2_inhibition', 
+            'cyp1a2_inhibition_drugbank_approved_percentile',
+            'cyp2c19_inhibition',
+            'cyp2c19_inhibition_drugbank_approved_percentile',
+            'cyp2c9_inhibition',
+            'cyp2c9_inhibition_drugbank_approved_percentile',
+            'cyp2d6_inhibition',
+            'cyp2d6_inhibition_drugbank_approved_percentile',
+            'cyp3a4_inhibition',
+            'cyp3a4_inhibition_drugbank_approved_percentile',
+            'cyp2c9_substrate',
+            'cyp2c9_substrate_drugbank_approved_percentile',
+            'cyp2d6_substrate',
+            'cyp2d6_substrate_drugbank_approved_percentile',
+            'cyp3a4_substrate',
+            'cyp3a4_substrate_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in metabolism_keys if key in self.properties}
+
+    def get_excretion_properties(self) -> Dict[str, float]:
+        """Returns excretion (clearance and half-life) properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of excretion properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        excretion_keys = [
+            'hepatic_clearance',
+            'hepatic_clearance_drugbank_approved_percentile',
+            'microsomal_clearance',
+            'microsomal_clearance_drugbank_approved_percentile',
+            'plasma_clearance',
+            'half_life',
+            'half_life_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in excretion_keys if key in self.properties}
+
+    def get_toxicity_properties(self) -> Dict[str, float]:
+        """Returns toxicity properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of toxicity properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        toxicity_keys = [
+            'ames_mutagenicity',
+            'ames_mutagenicity_drugbank_approved_percentile',
+            'clinical_toxicity',
+            'clinical_toxicity_drugbank_approved_percentile',
+            'drug_induced_liver_injury',
+            'drug_induced_liver_injury_drugbank_approved_percentile',
+            'herg_inhibition',
+            'herg_inhibition_drugbank_approved_percentile',
+            'lethal_dose_50',
+            'lethal_dose_50_drugbank_approved_percentile',
+            'skin_sensitization',
+            'skin_sensitization_drugbank_approved_percentile',
+            'carcinogens_lagunin_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in toxicity_keys if key in self.properties}
+
+    def get_nuclear_receptor_properties(self) -> Dict[str, float]:
+        """Returns nuclear receptor interaction properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of nuclear receptor properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        nuclear_receptor_keys = [
+            'androgen_receptor_binding', 
+            'androgen_receptor_binding_drugbank_approved_percentile',
+            'androgen_receptor_lbd',
+            'androgen_receptor_lbd_drugbank_approved_percentile',
+            'aryl_hydrocarbon_receptor',
+            'aryl_hydrocarbon_receptor_drugbank_approved_percentile',
+            'aromatase_inhibition',
+            'aromatase_inhibition_drugbank_approved_percentile',
+            'estrogen_receptor_binding',
+            'estrogen_receptor_binding_drugbank_approved_percentile',
+            'estrogen_receptor_lbd',
+            'estrogen_receptor_lbd_drugbank_approved_percentile',
+            'ppar_gamma',
+            'ppar_gamma_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in nuclear_receptor_keys if key in self.properties}
+
+    def get_stress_response_properties(self) -> Dict[str, float]:
+        """Returns stress response pathway properties (ADMET).
+
+        Ensure `calculate_admet_properties()` has been called before this method.
+
+        Returns:
+            Dict[str, float]: A dictionary of stress response properties.
+        """
+        if not self.properties or 'qed' not in self.properties:
+            return {}
+        stress_response_keys = [
+            'oxidative_stress_response',
+            'oxidative_stress_response_drugbank_approved_percentile',
+            'dna_damage_response',
+            'dna_damage_response_drugbank_approved_percentile',
+            'heat_shock_response',
+            'heat_shock_response_drugbank_approved_percentile',
+            'mitochondrial_toxicity',
+            'mitochondrial_toxicity_drugbank_approved_percentile',
+            'p53_pathway_activation',
+            'p53_pathway_activation_drugbank_approved_percentile'
+        ]
+        return {key: self.properties[key] for key in stress_response_keys if key in self.properties}
+
     def predict_mdck_permeability(self) -> float:
         """
         Predict MDCK cell permeability using molecular descriptors.
