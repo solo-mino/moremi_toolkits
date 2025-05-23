@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "moremi-biokit"
-version = "0.1.6"
+version = "0.1.65"
 description = "Core biological processing toolkit for the Moremi Bio ecosystem."
-readme = "README.md"
+readme = "../README.md"
 requires-python = ">=3.8"
-license = { file = "../../LICENSE" } # Points to the monorepo root LICENSE
+license-files = ["../LICENSE"] # Points to the monorepo root LICENSE
 authors = [
   { name = "Bio Team", email = "contact@minohealth.org" },
 ]
@@ -59,6 +59,9 @@ process-smiles-batch = "moremi_biokit.smiles.batch_molecule_processor:main"
 predict-structure = "moremi_biokit.proteins.analysis_tools.structure_predictor:main"
 fetch-pdb = "moremi_biokit.proteins.utils.pdb_fetcher:main"
 process-protein-batch = "moremi_biokit.proteins.batch_protein_processor:main"
+
+[tool.setuptools.packages.find]
+include = ["moremi_biokit", "moremi_biokit.*"]
 
 [tool.setuptools.package-data]
 # Include assets for smiles reports (fonts, images) and proteins utils (CSV database)
