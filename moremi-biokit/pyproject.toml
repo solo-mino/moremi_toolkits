@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "moremi-biokit"
 version = "0.1.65"
 description = "Core biological processing toolkit for the Moremi Bio ecosystem."
-readme = "../README.md"
+# readme = "../README.md"
 requires-python = ">=3.8"
-license-files = ["../LICENSE"] # Points to the monorepo root LICENSE
+# license-files = ["../LICENSE"] # Points to the monorepo root LICENSE
 authors = [
   { name = "Bio Team", email = "contact@minohealth.org" },
 ]
