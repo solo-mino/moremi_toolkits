@@ -781,8 +781,14 @@ def get_all_pdb_chain_sequences_details(pdb_id: str) -> Dict[str, Any]:
         Dict[str, Any]: A dictionary containing sequence details for all chains of the PDB.
         Returns an empty list if no sequences can be found or an error occurs.
     """
-    normalized_pdb_id = pdb_id.lower()
+    if not isinstance(pdb_id, str) or len(pdb_id) != 4:
+        print(f"Error (get_all_pdb_chain_sequences_details): Invalid PDB ID '{pdb_id}'. Must be a 4-character string.")
+        return {}
+    
+    normalized_pdb_id = pdb_id.lower()    
+    
     api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/pdb/{normalized_pdb_id}"
+    
     
     try:
         response = make_api_request(url=api_url, method="GET")
