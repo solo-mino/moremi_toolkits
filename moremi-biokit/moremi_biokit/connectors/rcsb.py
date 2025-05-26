@@ -722,9 +722,6 @@ def fetch_sequence_details_by_pdb_chain_id(pdb_chain_id: str) -> Optional[Dict[s
     # api_url = f"{LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT}/{api_target_pdb_chain_id}"
     api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/{api_target_pdb_chain_id}"
     
-    
-    # Consider using proper logging in a library context
-    print(f"Info (fetch_sequence_details_by_pdb_chain_id): Fetching from microservice: {api_url}")
 
     try:
         response = make_api_request(url=api_url, method="GET")
@@ -773,22 +770,16 @@ def fetch_sequence_details_by_pdb_chain_id(pdb_chain_id: str) -> Optional[Dict[s
         print(f"Error (fetch_sequence_details_by_pdb_chain_id): An unexpected error occurred for '{api_target_pdb_chain_id}': {e}")
         return None
 
-# TODO: CHANGE THIS FUNCTIONALITY TO USE NEW DOCKERIZED MOREMI-SERVICE API
-def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
-    """Fetches all sequence details for a given PDB ID.
 
-    It first attempts to retrieve sequences from the local PDB FASTA database.
-    If not found locally (or if the local DB is unavailable), it falls back to
-    fetching the FASTA file from the RCSB online service and parsing all sequences.
+def get_all_pdb_chain_sequences_details(pdb_id: str) -> Dict[str, Any]:
+    """Fetches all sequence details for a given PDB ID from moremi-service.
 
     Args:
         pdb_id (str): The 4-character PDB ID (case-insensitive).
 
     Returns:
-        List[Dict[str, Any]]: A list of dictionaries, where each dictionary
-        contains sequence details for a chain, structured as in
-        `get_pdb_chain_sequence_details`. Returns an empty list if no
-        sequences can be found or an error occurs.
+        Dict[str, Any]: A dictionary containing sequence details for all chains of the PDB.
+        Returns an empty list if no sequences can be found or an error occurs.
     """
     normalized_pdb_id = pdb_id.lower()
     api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/pdb/{normalized_pdb_id}"
@@ -797,19 +788,19 @@ def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
         response = make_api_request(url=api_url, method="GET")
         api_data = response.json()
 
-        if not isinstance(api_data, list):
-            print(f"Error (get_all_pdb_sequences_details): API response for '{normalized_pdb_id}' is not a valid JSON array.")
-            return []
+        if not isinstance(api_data, dict):
+            print(f"Error (get_all_pdb_chain_sequences_details): API response for '{normalized_pdb_id}' is not a valid JSON object.")
+            return {}
         
         return api_data
 
     except APIRequestError as e:
-        print(f"Error (get_all_pdb_sequences_details): API request failed for '{normalized_pdb_id}': {e}")
-        return []
+        print(f"Error (get_all_pdb_chain_sequences_details): API request failed for '{normalized_pdb_id}': {e}")
+        return api_data.get('detail', {})
     except requests.exceptions.JSONDecodeError as e:
-        print(f"Error (get_all_pdb_sequences_details): Failed to decode JSON response from '{api_url}': {e}")
-        return []
+        print(f"Error (get_all_pdb_chain_sequences_details): Failed to decode JSON response from '{api_url}': {e}")
+        return api_data.get('detail', {})
     except Exception as e:
-        print(f"Error (get_all_pdb_sequences_details): An unexpected error occurred for '{normalized_pdb_id}': {e}")
-        return []
+        print(f"Error (get_all_pdb_chain_sequences_details): An unexpected error occurred for '{normalized_pdb_id}': {e}")
+        return api_data.get('detail', {})
             
