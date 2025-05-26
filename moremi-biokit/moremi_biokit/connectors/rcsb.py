@@ -791,7 +791,7 @@ def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
         sequences can be found or an error occurs.
     """
     normalized_pdb_id = pdb_id.lower()
-    api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/api/v1/sequence/pdb/{normalized_pdb_id}"
+    api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/pdb/{normalized_pdb_id}"
     
     try:
         response = make_api_request(url=api_url, method="GET")
