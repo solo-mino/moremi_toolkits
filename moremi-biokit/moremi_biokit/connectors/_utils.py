@@ -39,7 +39,7 @@ def make_api_request(
     method: str = "GET",
     params: Optional[Dict[str, Any]] = None,
     data: Optional[Union[Dict[str, Any], str]] = None,
-    json_data: Optional[Dict[str, Any]] = None,
+    json_payload: Optional[Dict[str, Any]] = None,
     headers: Optional[Dict[str, str]] = None,
     timeout: int = 30, # seconds
     retries: int = 3,
@@ -53,7 +53,7 @@ def make_api_request(
         method (str, optional): HTTP method (GET, POST, etc.). Defaults to "GET".
         params (Optional[Dict[str, Any]], optional): URL parameters. Defaults to None.
         data (Optional[Union[Dict[str, Any], str]], optional): Data to send in the body (for POST/PUT). Defaults to None.
-        json_data (Optional[Dict[str, Any]], optional): JSON data to send in the body. Defaults to None.
+        json_payload (Optional[Dict[str, Any]], optional): JSON data to send in the body. Defaults to None.
         headers (Optional[Dict[str, str]], optional): HTTP headers. Defaults to None.
                                                    A default User-Agent is added if not provided.
         timeout (int, optional): Request timeout in seconds. Defaults to 30.
@@ -79,7 +79,7 @@ def make_api_request(
                 url=url,
                 params=params,
                 data=data,
-                json=json_data,
+                json=json_payload,
                 headers=effective_headers,
                 timeout=timeout,
                 stream=stream
