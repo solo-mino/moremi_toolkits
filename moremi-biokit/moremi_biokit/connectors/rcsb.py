@@ -728,10 +728,8 @@ def fetch_sequence_details_by_pdb_chain_id(pdb_chain_id: str) -> Optional[Dict[s
 
     try:
         response = make_api_request(url=api_url, method="GET")
-        # make_api_request handles retries and raises APIRequestError for HTTP errors.
-        # If it returns, it means the HTTP request itself was successful (e.g. 200 OK).
-        
-        api_data = response.json() # Can raise requests.exceptions.JSONDecodeError
+
+        api_data = response.json() 
 
         if not isinstance(api_data, dict):
             print(f"Error (fetch_sequence_details_by_pdb_chain_id): API response for '{api_target_pdb_chain_id}' is not a valid JSON object.")
@@ -792,5 +790,26 @@ def get_all_pdb_sequences_details(pdb_id: str) -> List[Dict[str, Any]]:
         `get_pdb_chain_sequence_details`. Returns an empty list if no
         sequences can be found or an error occurs.
     """
-    pass
+    normalized_pdb_id = pdb_id.lower()
+    api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/api/v1/sequence/pdb/{normalized_pdb_id}"
+    
+    try:
+        response = make_api_request(url=api_url, method="GET")
+        api_data = response.json()
 
+        if not isinstance(api_data, list):
+            print(f"Error (get_all_pdb_sequences_details): API response for '{normalized_pdb_id}' is not a valid JSON array.")
+            return []
+        
+        return api_data
+
+    except APIRequestError as e:
+        print(f"Error (get_all_pdb_sequences_details): API request failed for '{normalized_pdb_id}': {e}")
+        return []
+    except requests.exceptions.JSONDecodeError as e:
+        print(f"Error (get_all_pdb_sequences_details): Failed to decode JSON response from '{api_url}': {e}")
+        return []
+    except Exception as e:
+        print(f"Error (get_all_pdb_sequences_details): An unexpected error occurred for '{normalized_pdb_id}': {e}")
+        return []
+            
