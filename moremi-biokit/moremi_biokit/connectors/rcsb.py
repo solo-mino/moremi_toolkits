@@ -26,8 +26,8 @@ import requests # For requests.exceptions.JSONDecodeError
 RCSB_DATA_API_ENDPOINT = "https://data.rcsb.org/graphql"
 RCSB_SEARCH_API_ENDPOINT = "https://search.rcsb.org/rcsbsearch/v2/query"
 RSCB_REST_API_ENDPOINT = "https://data.rcsb.org/rest/v1/core/entry"
-LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT = "http://localhost:8000/api/v1/sequence"
-MOREMI_MICROSERVICE_API_ENDPOINT = "http://167.172.158.230:8000/api/v1/sequence"
+LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT = "http://localhost:8001/api/v1/sequence"
+MOREMI_MICROSERVICE_API_ENDPOINT = "http://167.172.158.230:8001/api/v1/sequence"
 
 
 def download_pdb_from_rcsb(pdb_id: str, output_dir: str, file_format: str = 'pdb') -> Optional[str]:
@@ -718,7 +718,7 @@ def fetch_sequence_details_by_pdb_chain_id(pdb_chain_id: str) -> Optional[Dict[s
     api_target_pdb_chain_id = f"{normalized_pdb_id}_{normalized_chain_id}"
 
     # Microservice endpoint URL
-    # For local dev: http://localhost:8000/api/v1/sequence/{pdb_chain_id}
+    # For local dev: http://localhost:8001/api/v1/sequence/{pdb_chain_id}
     # api_url = f"{LOCAL_MOREMI_MICROSERVICE_API_ENDPOINT}/{api_target_pdb_chain_id}"
     api_url = f"{MOREMI_MICROSERVICE_API_ENDPOINT}/{api_target_pdb_chain_id}"
     
