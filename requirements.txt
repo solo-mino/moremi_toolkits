@@ -14,6 +14,7 @@ requests
 rdkit
 py3Dmol
 pyfaidx
+rcsb-api
 
 
 # use conda to install openbabel only as it is not available in pip

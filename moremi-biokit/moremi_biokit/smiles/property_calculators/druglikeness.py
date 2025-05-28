@@ -166,7 +166,7 @@ class DruglikenessProperties:
         """
         mw = Descriptors.ExactMolWt(self.molecule)
         # Use XLOGP3 specifically for Muegge rule
-        xlogp = Descriptors.MolMR(self.molecule) * 0.1 + 1.9  # Approximation of XLOGP3
+        xlogp = Descriptors.MolLogP(self.molecule)
         tpsa = Descriptors.TPSA(self.molecule)
         rings = Chem.GetSSSR(self.molecule)
         rotatable_bonds = Descriptors.NumRotatableBonds(self.molecule)
