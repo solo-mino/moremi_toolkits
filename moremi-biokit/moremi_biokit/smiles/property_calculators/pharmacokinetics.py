@@ -68,8 +68,7 @@ class PharmacokineticsProperties:
         
         # BOILED-Egg rules for BBB permeation
         
-        # return (tpsa < 79 and logp > 0.4 and logp < 6.0)
-        return (tpsa < 79 and (0.4 < logp < 0.6))
+        return (tpsa < 79 and (0.4 < logp < 6.0))
                 
     def _predict_pgp_substrate(self) -> bool:
         """
