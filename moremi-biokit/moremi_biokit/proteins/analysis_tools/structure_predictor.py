@@ -160,22 +160,22 @@ def predict_structure(
         
         with open(pdb_file_path, 'w', encoding='utf-8') as f_pdb:
             f_pdb.write(pdb_content)
-
+        print("model_info: ", model_info)
         return {
             "message": "Structure prediction successful.",
-            "project_id": project_id,
-            "gmqe": model_info.get("gmqe"),
+            "project_id": project_id if project_id else "",
+            "gmqe": model_info.get("gmqe") if model_info else 0,
             "model_details": {
-                "model_id": model_info.get("model_id"),
-                "status": model_info.get("status"),
-                "qmean":model_info.get("qmean_global").get("avg_local_score"),
-                "coordinate_url": model_info.get("coordinates_url"),
-                "modelcif_url": model_info.get("modelcif_url"),
+                "model_id": model_info.get("model_id") if model_info else "",
+                "status": model_info.get("status") if model_info else None,
+                "qmean":model_info.get("qmean_global").get("avg_local_score") if model_info and model_info.get("qmean_global") else None,
+                "coordinate_url": model_info.get("coordinates_url") if model_info else "",
+                "modelcif_url": model_info.get("modelcif_url") if model_info else "",
             },
-            "pdb_file_path": pdb_file_path,
-            "date_created": status_data.get("date_created"),
-            "project_title": status_data.get("project_title"),
-            "view_url": status_data.get("view_url"),
+            "pdb_file_path": pdb_file_path if pdb_file_path else "",
+            "date_created": status_data.get("date_created") if status_data else None,
+            "project_title": status_data.get("project_title") if status_data else None,
+            "view_url": status_data.get("view_url") if status_data else None,
             
             # TODO: DELETE FOR NOW BECAUSE OG LARGE PDB
             # "pdb_content": pdb_content # Be cautious with large PDB files in memory
