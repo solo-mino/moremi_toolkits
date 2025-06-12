@@ -88,8 +88,8 @@ class ScoringConfig:
             'score_func': lambda x: 1 - (x / 8) if isinstance(x, (float, int)) and 0 <= x <= 8 else (0.0 if isinstance(x, (float, int)) and x > 8 else (1.0 if isinstance(x, (float, int)) and x < 0 else 0.0))
         },
         'gravy': {
-            'optimal_range': (-1.5, -0.5),
-            'score_func': lambda x: (float(x) + 1.5) / 1.0 if isinstance(x, (float, int)) and -1.5 <= float(x) <= -0.5 else 0.0
+            'optimal_range': (-1, 0),
+            'score_func': lambda x: 0.0 if not isinstance(x, (float, int)) or x < -1 or x > 0 else (float(x) + 1.0) / 1.0
         },
         'solubility': {
             'score_func': lambda x: 1.0 if x == 'Soluble' else 0.0
@@ -103,8 +103,12 @@ class ScoringConfig:
             'score_func': lambda x: x if isinstance(x, (float, int)) and 0 <= x <= 1 else (0.0 if isinstance(x, (float, int)) and x < 0 else (1.0 if isinstance(x, (float, int)) and x > 1 else 0.0))
         },
         'melting_temperature_celsius': {
-            'optimal_range': (65, 90),
-            'score_func': lambda x: 0.0 if not isinstance(x, (float, int)) or x < 65 or x > 90 else (x - 65) / 25
+            'optimal_range': (40, 90),
+            'score_func': lambda x: (
+                0.0 if not isinstance(x, (float, int)) or x < 40 or x > 90
+                else 1.0 if 60 <= x <= 90
+                else (x - 40) / 20  # For range 40-60, closer to 60 gives score closer to 1
+            )
         },
         'epitope_score': {
             'optimal_range': (0, 1),
@@ -460,7 +464,7 @@ class ProteinRanker:
                         row['gravy_value'] = metric_category_data.get('gravy', np.nan)
                         row['solubility'] = metric_category_data.get('predicted_solubility', "Unknown")
                     elif cat_enum == MetricCategory.IMMUNOGENICITY:
-                        row['immunogenicity_value'] = metric_category_data.get('immunogenicity_score', np.nan)
+                        row['immunogenicity_value'] = metric_category_data.get('immunogenic_score', np.nan)
                     elif cat_enum == MetricCategory.STABILITY:
                         row['melting_temperature'] = metric_category_data.get('melting_temperature_celsius', np.nan)
                     elif cat_enum == MetricCategory.AGGREGATION:
@@ -474,9 +478,9 @@ class ProteinRanker:
                     elif cat_enum == MetricCategory.BINDING_AFFINITY:
                         row['dissociation_constant_value'] = metric_category_data.get('dissociation_constant', np.nan)
                     elif cat_enum == MetricCategory.EPITOPE:
-                        row['epitope_score_value'] = metric_category_data.get('overall_epitope_score', metric_category_data.get('epitope_score', np.nan))
+                        row['epitope_score_value'] = metric_category_data.get('overall_average_score',  np.nan)
                     elif cat_enum == MetricCategory.CONSERVANCY:
-                        row['conservancy_score_value'] = metric_category_data.get('overall_conservancy_score', np.nan)
+                        row['conservancy_score_value'] = metric_category_data.get('conservancy_score', np.nan)
                     elif cat_enum == MetricCategory.DEVELOPABILITY:
                         row['developability_value'] = metric_category_data.get('developability_score', np.nan)
                     

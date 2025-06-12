@@ -9,12 +9,12 @@
 | **Glycosylation Sites** | **0.10**  | N-Glycosylation Sites Count                            | (1 - 4)             | Closer to **4**            |
 | **Aggregation**       | **0.10**   | Aggregation Propensity (Low, Medium, High)            | Low                 | **Low is better**          |
 |                       |           | Aggregation-Prone Regions                             | (0 - 8)             | Closer to **0**            |
-| **ProtParam**         | **0.10**   | GRAVY Score                                           | (-0.5, -1.5)        | Closer to **-0.5**         |
+| **ProtParam**         | **0.10**   | GRAVY Score                                           | (-1, 0)        | Closer to **0**         |
 |                       |           | Solubility                                            | Soluble/Not Soluble | **Soluble is better**      |
 | **Immunogenicity**    | **0.05**   | Immunogenic Score                                     | (0 - 1)             | Closer to **1**            |
 | **Conservancy**       | **0.05**   | Conservancy Score                                     | (0 - 1)             | Closer to **1**            |
 | **Stability**         | **0.05**   | Melting Temperature (Tm)                              | ≤ 65°C → **0** & > 90°C → **0**      |                            |
-|                       |           |                                                       | 65°C to 90°C        | Closer to **90°C**         |
+|                       |           |                                                       | 40°C to 90°C        | Closer to **60°C** & 60-90 is 1        |
 | **Epitope**          | **0.03**   | Epitope Score                                        | (0 - 1)             | Closer to **1**            |
 | **Developability**    | **0.02**   | Developability Score                                 | (0 - 1)             | Closer to **1**            |
 
@@ -41,7 +41,7 @@
 
 ## 5. ProtParam (Weight: 0.10)
 
-- GRAVY Score: Range (-0.5, -1.5) → Closer to -0.5 is better (Higher score).
+- GRAVY Score: Range (-1, 0) → Closer to 0 is better (Higher score).
 - Solubility: Soluble is better → Higher score.
 
 ## 6. Immunogenicity (Weight: 0.05)
@@ -55,8 +55,9 @@
 ## 8. Stability (Weight: 0.05)
 
 - Melting Temperature (Tm):
-  - Tm ≤ 65°C → Score = 0.
-  - 65°C to 90°C → Higher is better (Closer to 90°C gets a higher score).
+  - Tm ≤ 45°C or >= 90°C → Score = 0.
+  - 40°C to 60°C → Higher is better (Closer to 60°C gets a higher score).
+  - 60°C and 90°C → 1
 
 ## 9. Epitope (Weight: 0.03)
 

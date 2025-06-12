@@ -104,12 +104,12 @@ class ProteinMetrics:
         """Reconstructs a ProteinMetrics object from a dictionary (e.g., from JSON)."""
         metrics_data = data.get('metrics', {})
         return cls(
-            sequence=data.get('sequence', ''),
-            antigen=data.get('antigen', 'N/A'),
-            antigen_id=data.get('antigen_id'),
+            sequence=data.get('sequence', None),
+            antigen=data.get('antigen', None),
+            antigen_id=data.get('antigen_id', None),
             molecular_weight=data.get('molecular_weight', 0.0),
-            molecular_formula=data.get('molecular_formula', 'N/A'),
-            antigen_pdb_chain_id=data.get('antigen_pdb_chain_id'),
+            molecular_formula=data.get('molecular_formula', None),
+            antigen_pdb_chain_id=data.get('antigen_pdb_chain_id', None),
             
             blast=metrics_data.get(MetricCategory.BLAST.value.lower(), metrics_data.get('blast', {})), # Handle old and new key naming
             protparam=metrics_data.get(MetricCategory.PROTPARAM.value.lower(), metrics_data.get('protparam', {})),
