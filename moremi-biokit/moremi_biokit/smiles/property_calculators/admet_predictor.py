@@ -33,7 +33,7 @@ class ADMETPredictor:
     Provides predictions for absorption, distribution, metabolism, excretion, and toxicity properties.
     """
     
-    def __init__(self, smiles: Optional[str] = None, show_progress: bool = True):
+    def __init__(self, smiles: Optional[str] = None):
         """
         Initialize predictor. SMILES string can be provided at instantiation or later
         to the `calculate_admet_properties` method.
@@ -47,7 +47,6 @@ class ADMETPredictor:
         self.smiles: Optional[str] = None
         self.mol: Optional[Chem.Mol] = None
         self.properties: Dict[str, any] = {} # Initialize properties dictionary
-        self.show_progress = show_progress
         
         if smiles is not None:
             self._set_molecule_and_base_properties(smiles)
@@ -225,7 +224,7 @@ class ADMETPredictor:
         
         # At this point, self.smiles, self.mol, and self.properties (with RDKit descriptors) are set.
         # Ensure self.smiles is used for ADMET-AI prediction, as it's confirmed valid by _set_molecule_and_base_properties
-        pred = model.predict(self.smiles, show_progress=self.show_progress) # Use the validated self.smiles
+        pred = model.predict(self.smiles) # Use the validated self.smiles
         
         # These methods rely on self.properties which are populated by _calculate_molecular_properties
         mdck_permeability = self.predict_mdck_permeability()
